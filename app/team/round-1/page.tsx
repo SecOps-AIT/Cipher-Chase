@@ -31,6 +31,38 @@ export default function TeamRound1Page() {
   const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(1500);
   const { data: questionsData, loading: qLoading, refresh: refreshQuestions } = useActiveQuestions(1500);
 
+  // Timer auto-start state
+  const [timerStartAttempted, setTimerStartAttempted] = useState(false);
+
+  // Auto-start team timer when page loads (if not already started)
+  useEffect(() => {
+    const autoStartTimer = async () => {
+      if (!questionsData?.teamTimer || timerStartAttempted) return;
+      
+      // Only start timer if it hasn't started yet
+      if (questionsData.teamTimer.status === "NOT_STARTED") {
+        setTimerStartAttempted(true);
+        
+        try {
+          const res = await fetch("/api/round-1/start", { method: "POST" });
+          if (res.ok) {
+            console.log("✅ Team timer started automatically");
+            // Refresh data to show updated timer
+            refreshQuestions();
+            refreshTeam();
+          } else {
+            const error = await res.json();
+            console.error("❌ Failed to start timer:", error.error);
+          }
+        } catch (error) {
+          console.error("❌ Error starting timer:", error);
+        }
+      }
+    };
+    
+    autoStartTimer();
+  }, [questionsData?.teamTimer, timerStartAttempted, refreshQuestions, refreshTeam]);
+
   // Selected question modal state
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionView | null>(null);
   const [flagInput, setFlagInput] = useState("");
@@ -42,14 +74,14 @@ export default function TeamRound1Page() {
     points?: number;
   } | null>(null);
 
-  // Timer countdown calculations
+  // Timer countdown calculations - USE TEAM TIMER, NOT BATCH TIMER
   const [localSecondsRemaining, setLocalSecondsRemaining] = useState<number>(0);
 
   useEffect(() => {
-    if (questionsData?.batchInfo?.secondsRemaining !== undefined) {
-      setLocalSecondsRemaining(questionsData.batchInfo.secondsRemaining);
-    }
-  }, [questionsData?.batchInfo?.secondsRemaining]);
+    // Use team timer if available, fall back to batch timer
+    const timerSeconds = questionsData?.teamTimer?.secondsRemaining ?? questionsData?.batchInfo?.secondsRemaining ?? 0;
+    setLocalSecondsRemaining(timerSeconds);
+  }, [questionsData?.teamTimer?.secondsRemaining, questionsData?.batchInfo?.secondsRemaining]);
 
   useEffect(() => {
     if (localSecondsRemaining <= 0) return;
@@ -271,15 +303,25 @@ export default function TeamRound1Page() {
               BATCH {batchInfo?.currentBatch || 1} / {batchInfo?.totalBatches || 1}
             </h2>
             <p className="text-xs text-slate-400 font-mono">
-              Status: <span className="text-emerald-400 font-bold">{currentRound?.status || "LIVE"}</span> • Solves: <strong className="text-white">{team.solvesCount}</strong>
+              Timer: <span className={`font-bold ${
+                questionsData?.teamTimer?.status === "ACTIVE" ? "text-emerald-400" :
+                questionsData?.teamTimer?.status === "EXPIRED" ? "text-rose-400" : 
+                "text-amber-400"
+              }`}>
+                {questionsData?.teamTimer?.status || "NOT_STARTED"}
+              </span> • Solves: <strong className="text-white">{team.solvesCount}</strong>
             </p>
           </div>
 
           <div className="text-right bg-slate-950/80 border border-slate-800/80 p-4 rounded-xl">
             <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
-              TIME REMAINING
+              TEAM TIMER {questionsData?.teamTimer?.started ? "(STARTED)" : "(NOT STARTED)"}
             </span>
-            <span className="text-3xl font-black font-mono text-amber-400 tracking-wider">
+            <span className={`text-3xl font-black font-mono tracking-wider ${
+              questionsData?.teamTimer?.status === "ACTIVE" ? "text-emerald-400" :
+              questionsData?.teamTimer?.status === "EXPIRED" ? "text-rose-400" :
+              "text-amber-400"
+            }`}>
               {formatTimer(localSecondsRemaining)}
             </span>
           </div>

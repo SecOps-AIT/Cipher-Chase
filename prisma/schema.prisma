@@ -1,29 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Event {
   id          String       @id @default(cuid())
   name        String
-  status      String       @default("DRAFT") // DRAFT, LIVE, FINISHED
+  status      String       @default("DRAFT")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  teams       Team[]
+  auditLogs   AuditLog[]
   rounds      Round[]
   scoreEvents ScoreEvent[]
-  auditLogs   AuditLog[]
+  teams       Team[]
 }
 
 model Team {
   id                String                 @id @default(cuid())
   eventId           String
-  event             Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name              String
   joinCode          String
   score             Int                    @default(0)
@@ -32,18 +31,19 @@ model Team {
   qualified         Boolean                @default(false)
   round1StartedAt   DateTime?
   round1DeadlineAt  DateTime?
-  round1Duration    Int                    @default(1800) // seconds, default 30 minutes
+  round1Duration    Int                    @default(1800)
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
-  members           TeamMember[]
-  submissions       Submission[]
-  scoreEvents       ScoreEvent[]
   hintClaims        HintClaim[]
+  scoreEvents       ScoreEvent[]
+  submissions       Submission[]
+  event             Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   challengeAttempts TeamChallengeAttempt[]
+  members           TeamMember[]
 
   @@unique([eventId, joinCode])
   @@unique([eventId, name])
-  @@index([eventId, score(sort: Desc), scoreReachedAt(sort: Asc)])
+  @@index([eventId, score(sort: Desc), scoreReachedAt])
   @@index([eventId])
   @@index([joinCode])
   @@index([round1DeadlineAt])
@@ -52,12 +52,12 @@ model Team {
 model TeamMember {
   id        String   @id @default(cuid())
   teamId    String
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   name      String
-  phone     String?  // Optional for regular members, required for team lead
-  email     String?  // Optional for regular members, required for team lead
-  isLeader  Boolean  @default(false) // True for team creator
+  phone     String?
+  email     String?
+  isLeader  Boolean  @default(false)
   createdAt DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([teamId])
 }
@@ -65,40 +65,40 @@ model TeamMember {
 model Round {
   id                String             @id @default(cuid())
   eventId           String
-  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name              String
   number            Int
-  status            String             @default("DRAFT") // DRAFT, READY, LIVE, PAUSED, FINISHED
+  status            String             @default("DRAFT")
   startedAt         DateTime?
   endedAt           DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  questions         Question[]
   auctionChallenges AuctionChallenge[]
+  questions         Question[]
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   scoreEvents       ScoreEvent[]
 
   @@index([eventId, number])
 }
 
 model Question {
-  id          String       @id @default(cuid())
-  roundId     String
-  round       Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  title       String
-  description String       @db.Text
-  answer      String
+  id              String       @id @default(cuid())
+  roundId         String
+  title           String
+  description     String
+  answer          String
   points          Int          @default(100)
   firstBloodBonus Int          @default(50)
-  difficulty      String       @default("MEDIUM") // EASY, MEDIUM, HARD
+  difficulty      String       @default("MEDIUM")
   category        String       @default("General")
   releaseAt       DateTime
   closeAt         DateTime
   batchNumber     Int          @default(1)
-  answerMode      String       @default("TRIMMED") // EXACT, TRIMMED, CASE_INSENSITIVE
+  answerMode      String       @default("TRIMMED")
   isActive        Boolean      @default(true)
   order           Int          @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  round           Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
   submissions     Submission[]
 
   @@index([roundId, batchNumber, order])
@@ -111,14 +111,14 @@ model Question {
 model Submission {
   id              String   @id @default(cuid())
   teamId          String
-  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   questionId      String
-  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   submittedAnswer String
   isCorrect       Boolean
   isFirstBlood    Boolean  @default(false)
   submittedAt     DateTime @default(now())
   submittedBy     String?
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([teamId, questionId])
   @@index([teamId, questionId, isCorrect])
@@ -130,15 +130,15 @@ model Submission {
 model ScoreEvent {
   id        String   @id @default(cuid())
   eventId   String
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   teamId    String
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   roundId   String?
-  round     Round?   @relation(fields: [roundId], references: [id], onDelete: SetNull)
-  type      String   // ROUND1_CORRECT, ROUND2_SUCCESS, SPEED_BONUS, HINT_COST, ROUND2_FAILURE, MANUAL_ADJUSTMENT
+  type      String
   points    Int
   reason    String
   createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  round     Round?   @relation(fields: [roundId], references: [id])
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([eventId, teamId])
   @@index([teamId, createdAt])
@@ -149,11 +149,10 @@ model ScoreEvent {
 model AuctionChallenge {
   id               String                 @id @default(cuid())
   roundId          String
-  round            Round                  @relation(fields: [roundId], references: [id], onDelete: Cascade)
   title            String
-  description      String                 @db.Text
+  description      String
   basePoints       Int                    @default(200)
-  status           String                 @default("DRAFT") // DRAFT, READY, LIVE, COMPLETED, FAILED
+  status           String                 @default("DRAFT")
   winningTeamId    String?
   committedSeconds Int?
   startedAt        DateTime?
@@ -164,6 +163,7 @@ model AuctionChallenge {
   order            Int                    @default(0)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
+  round            Round                  @relation(fields: [roundId], references: [id], onDelete: Cascade)
   hints            Hint[]
   attempts         TeamChallengeAttempt[]
 
@@ -171,13 +171,13 @@ model AuctionChallenge {
 }
 
 model Hint {
-  id          String            @id @default(cuid())
+  id          String           @id @default(cuid())
   challengeId String
-  challenge   AuctionChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   title       String
-  content     String            @db.Text
-  cost        Int               @default(50)
-  order       Int               @default(0)
+  content     String
+  cost        Int              @default(50)
+  order       Int              @default(0)
+  challenge   AuctionChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   claims      HintClaim[]
 
   @@index([challengeId, order])
@@ -186,11 +186,11 @@ model Hint {
 model HintClaim {
   id        String   @id @default(cuid())
   teamId    String
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   hintId    String
-  hint      Hint     @relation(fields: [hintId], references: [id], onDelete: Cascade)
   cost      Int
   claimedAt DateTime @default(now())
+  hint      Hint     @relation(fields: [hintId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, hintId])
   @@index([teamId])
@@ -199,9 +199,7 @@ model HintClaim {
 model TeamChallengeAttempt {
   id              String           @id @default(cuid())
   teamId          String
-  team            Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
   challengeId     String
-  challenge       AuctionChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   startedAt       DateTime
   deadlineAt      DateTime
   completedAt     DateTime?
@@ -209,6 +207,8 @@ model TeamChallengeAttempt {
   timeUsedSeconds Int?
   pointsAwarded   Int              @default(0)
   createdAt       DateTime         @default(now())
+  challenge       AuctionChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  team            Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([teamId, success])
   @@index([challengeId])
@@ -217,12 +217,12 @@ model TeamChallengeAttempt {
 model AuditLog {
   id        String   @id @default(cuid())
   eventId   String?
-  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   teamId    String?
-  actor     String   @default("SYSTEM") // ADMIN, TEAM, SYSTEM
+  actor     String   @default("SYSTEM")
   action    String
-  details   String?  @db.Text
+  details   String?
   createdAt DateTime @default(now())
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId, createdAt])
   @@index([actor, action])
