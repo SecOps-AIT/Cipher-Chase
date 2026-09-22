@@ -48,7 +48,7 @@ export async function GET() {
         qualified: team.qualified,
         members: team.members.map((m) => m.name),
         memberCount: team.members.length,
-        maxMembers: 4,
+        maxMembers: 3,
         currentMember: session.memberName,
         memberId: session.memberId,
         solvesCount: team.submissions.length,

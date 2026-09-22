@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { LeaderboardEntry } from "@/lib/leaderboard";
+import { useSupabaseRealtime } from "./useSupabaseRealtime";
 
 interface LeaderboardData {
   event: { id: string; name: string; status: string } | null;
@@ -10,7 +11,7 @@ interface LeaderboardData {
   serverTime: string;
 }
 
-export function useLeaderboard(pollIntervalMs: number = 1500) {
+export function useLeaderboard(pollIntervalMs: number = 3000) {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,11 +30,37 @@ export function useLeaderboard(pollIntervalMs: number = 1500) {
     }
   }, []);
 
+  // Subscribe to Team score updates via Supabase Realtime
+  const { isAvailable: realtimeAvailable } = useSupabaseRealtime({
+    table: "Team",
+    event: "UPDATE",
+    onChange: () => {
+      // Refresh leaderboard when any team's score changes
+      fetchLeaderboard();
+    },
+  });
+
+  // Subscribe to ScoreEvent inserts for instant updates
+  useSupabaseRealtime({
+    table: "ScoreEvent",
+    event: "INSERT",
+    onChange: () => {
+      // Refresh leaderboard when new score events are created
+      fetchLeaderboard();
+    },
+  });
+
+  // Initial fetch and polling fallback
   useEffect(() => {
     fetchLeaderboard();
-    const timer = setInterval(fetchLeaderboard, pollIntervalMs);
+    
+    // If realtime is available, use longer poll interval as fallback
+    // If not available, use shorter poll interval
+    const interval = realtimeAvailable ? pollIntervalMs * 2 : pollIntervalMs;
+    const timer = setInterval(fetchLeaderboard, interval);
+    
     return () => clearInterval(timer);
-  }, [fetchLeaderboard, pollIntervalMs]);
+  }, [fetchLeaderboard, pollIntervalMs, realtimeAvailable]);
 
   return { data, loading, error, refresh: fetchLeaderboard };
 }

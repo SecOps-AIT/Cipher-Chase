@@ -12,7 +12,7 @@ describe("Cipher Chase — Team System & Round 1 Core Logic", () => {
       members: Member[];
     }
 
-    const MAX_MEMBERS = 4;
+    const MAX_MEMBERS = 3;
 
     const joinTeamSim = (team: Team, memberName: string) => {
       const cleanName = memberName.trim();
@@ -35,7 +35,7 @@ describe("Cipher Chase — Team System & Round 1 Core Logic", () => {
         return {
           success: false,
           error: "TEAM_FULL",
-          message: "This team already has 4 members.",
+          message: "This team already has 3 members.",
           memberCount: team.members.length,
         };
       }
@@ -58,27 +58,27 @@ describe("Cipher Chase — Team System & Round 1 Core Logic", () => {
       expect(res.memberCount).toBe(1);
     });
 
-    it("allows 2nd, 3rd, and 4th members to join", () => {
+    it("allows 2nd and 3rd members to join, rejects 4th", () => {
       const team: Team = { id: "t1", name: "Cyber Wolves", members: [] };
       joinTeamSim(team, "Alice");
       joinTeamSim(team, "Bob");
       joinTeamSim(team, "Charlie");
       const res = joinTeamSim(team, "Dave");
-      expect(res.success).toBe(true);
-      expect(res.memberCount).toBe(4);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("TEAM_FULL");
+      expect(res.memberCount).toBe(3);
     });
 
-    it("rejects 5th member server-side with TEAM_FULL", () => {
+    it("rejects 4th member server-side with TEAM_FULL", () => {
       const team: Team = { id: "t1", name: "Cyber Wolves", members: [] };
       joinTeamSim(team, "Alice");
       joinTeamSim(team, "Bob");
       joinTeamSim(team, "Charlie");
-      joinTeamSim(team, "Dave");
 
-      const res = joinTeamSim(team, "Eve");
+      const res = joinTeamSim(team, "Dave");
       expect(res.success).toBe(false);
       expect(res.error).toBe("TEAM_FULL");
-      expect(res.memberCount).toBe(4);
+      expect(res.memberCount).toBe(3);
     });
 
     it("does not consume another slot when existing member reconnects / refreshes", () => {
@@ -95,7 +95,7 @@ describe("Cipher Chase — Team System & Round 1 Core Logic", () => {
       expect(team.members.length).toBe(2);
     });
 
-    it("handles simultaneous joins safely when at 3/4 capacity", () => {
+    it("handles simultaneous joins safely when at 3/3 capacity", () => {
       const team: Team = {
         id: "t1",
         name: "Cyber Wolves",
@@ -106,16 +106,17 @@ describe("Cipher Chase — Team System & Round 1 Core Logic", () => {
         ],
       };
 
-      // Member A joins
+      // Member A attempts to join when team is full
       const resA = joinTeamSim(team, "Dave");
-      expect(resA.success).toBe(true);
-      expect(team.members.length).toBe(4);
+      expect(resA.success).toBe(false);
+      expect(resA.error).toBe("TEAM_FULL");
+      expect(team.members.length).toBe(3);
 
-      // Member B attempts to join right after
+      // Member B also attempts to join
       const resB = joinTeamSim(team, "Eve");
       expect(resB.success).toBe(false);
       expect(resB.error).toBe("TEAM_FULL");
-      expect(team.members.length).toBe(4);
+      expect(team.members.length).toBe(3);
     });
   });
 

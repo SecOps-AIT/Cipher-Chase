@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSupabaseRealtime } from "./useSupabaseRealtime";
 
 export interface TeamState {
   team: {
@@ -26,7 +27,7 @@ export interface TeamState {
   serverTime: string;
 }
 
-export function useTeamState(pollIntervalMs: number = 2000) {
+export function useTeamState(pollIntervalMs: number = 3000) {
   const [state, setState] = useState<TeamState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +51,51 @@ export function useTeamState(pollIntervalMs: number = 2000) {
     }
   }, []);
 
+  // Subscribe to Team updates for score/status changes
+  const { isAvailable: realtimeAvailable } = useSupabaseRealtime({
+    table: "Team",
+    event: "UPDATE",
+    onChange: (payload) => {
+      // Refresh team state when team is updated
+      if (state?.team?.id && payload.new?.id === state.team.id) {
+        fetchTeamState();
+      }
+    },
+  });
+
+  // Subscribe to TeamMember changes (joins/leaves)
+  useSupabaseRealtime({
+    table: "TeamMember",
+    event: "*",
+    onChange: (payload) => {
+      // Refresh when members join or leave this team
+      if (state?.team?.id && payload.new?.teamId === state.team.id) {
+        fetchTeamState();
+      }
+    },
+  });
+
+  // Subscribe to ScoreEvent for instant score updates
+  useSupabaseRealtime({
+    table: "ScoreEvent",
+    event: "INSERT",
+    onChange: (payload) => {
+      // Refresh when this team gets score events
+      if (state?.team?.id && payload.new?.teamId === state.team.id) {
+        fetchTeamState();
+      }
+    },
+  });
+
   useEffect(() => {
     fetchTeamState();
-    const interval = setInterval(fetchTeamState, pollIntervalMs);
-    return () => clearInterval(interval);
-  }, [fetchTeamState, pollIntervalMs]);
+    
+    // Use longer poll interval when realtime is available
+    const interval = realtimeAvailable ? pollIntervalMs * 2 : pollIntervalMs;
+    const timer = setInterval(fetchTeamState, interval);
+    
+    return () => clearInterval(timer);
+  }, [fetchTeamState, pollIntervalMs, realtimeAvailable]);
 
   return { state, loading, error, refresh: fetchTeamState };
 }

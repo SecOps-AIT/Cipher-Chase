@@ -27,9 +27,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         return NextResponse.json({ error: "Member name is required" }, { status: 400 });
       }
 
-      if (team.members.length >= 4) {
+      if (team.members.length >= 3) {
         return NextResponse.json(
-          { error: "Team capacity reached (4/4 members). Cannot add more." },
+          { error: "Team capacity reached (3/3 members). Cannot add more." },
           { status: 400 }
         );
       }

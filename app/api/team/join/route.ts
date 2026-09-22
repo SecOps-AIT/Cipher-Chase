@@ -3,27 +3,73 @@ import { prisma } from "@/lib/prisma";
 import { TeamJoinSchema } from "@/lib/validation";
 import { setTeamSessionCookie } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
+import { nanoid } from "nanoid";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const result = TeamJoinSchema.safeParse(body);
+    
+    // Accept either joinCode (legacy) or teamName + memberName
+    const { teamName, memberName, joinCode, phone, email, isLeader } = body;
+    const cleanMemberName = memberName?.trim();
+    const cleanTeamName = teamName?.trim();
+    const cleanPhone = phone?.trim();
+    const cleanEmail = email?.trim();
 
-    if (!result.success) {
+    if (!cleanMemberName || (!cleanTeamName && !joinCode)) {
       return NextResponse.json(
-        { error: result.error.errors[0]?.message || "Invalid join code or member name." },
+        { error: "Member name and team name are required." },
         { status: 400 }
       );
     }
 
-    const { joinCode, memberName } = result.data;
-    const cleanMemberName = memberName.trim();
+    // If creating team (isLeader=true), require phone and email
+    if (isLeader && (!cleanPhone || !cleanEmail)) {
+      return NextResponse.json(
+        { error: "Phone and email are required for team leaders." },
+        { status: 400 }
+      );
+    }
 
-    // 1. Find team by unique joinCode
-    const team = await prisma.team.findFirst({
-      where: { joinCode },
-      include: { event: true },
-    });
+    // 1. Find or create team
+    let team = joinCode 
+      ? await prisma.team.findFirst({ where: { joinCode }, include: { event: true } })
+      : await prisma.team.findFirst({ where: { name: cleanTeamName }, include: { event: true } });
+
+    // If no team found and teamName provided, create new team
+    if (!team && cleanTeamName) {
+      // Get active event (status: LIVE)
+      const activeEvent = await prisma.event.findFirst({
+        where: { status: "LIVE" },
+      });
+
+      if (!activeEvent) {
+        return NextResponse.json(
+          { error: "No active event found. Contact admin." },
+          { status: 400 }
+        );
+      }
+
+      team = await prisma.team.create({
+        data: {
+          name: cleanTeamName,
+          joinCode: nanoid(8).toUpperCase(),
+          eventId: activeEvent.id,
+          score: 0,
+          wallet: 0, // Default to 0, can be adjusted by admin
+          qualified: false,
+        },
+        include: { event: true },
+      });
+
+      await logAuditEvent({
+        eventId: activeEvent.id,
+        teamId: team.id,
+        actor: "TEAM",
+        action: "TEAM_CREATED",
+        details: `Team "${cleanTeamName}" created by ${cleanMemberName}.`,
+      });
+    }
 
     if (!team) {
       return NextResponse.json(
@@ -51,8 +97,8 @@ export async function POST(req: Request) {
         // Reconnecting existing member — does NOT consume another slot!
         activeMemberId = existingMember.id;
       } else {
-        // Enforce maximum 4 members capacity server-side
-        if (currentMembers.length >= 4) {
+        // Enforce maximum 3 members capacity server-side
+        if (currentMembers.length >= 3) {
           throw new Error("TEAM_FULL");
         }
 
@@ -60,6 +106,9 @@ export async function POST(req: Request) {
           data: {
             teamId: team.id,
             name: cleanMemberName,
+            phone: cleanPhone || null,
+            email: cleanEmail || null,
+            isLeader: isLeader || false,
           },
         });
         activeMemberId = newMember.id;
@@ -90,7 +139,7 @@ export async function POST(req: Request) {
       action: joinResult.isReconnect ? "MEMBER_RECONNECTED" : "MEMBER_JOINED",
       details: `${cleanMemberName} ${
         joinResult.isReconnect ? "reconnected to" : "joined"
-      } "${team.name}" (${joinResult.memberList.length}/4 members).`,
+      } "${team.name}" (${joinResult.memberList.length}/3 members).`,
     });
 
     return NextResponse.json({
@@ -106,7 +155,7 @@ export async function POST(req: Request) {
         wallet: team.wallet,
         qualified: team.qualified,
         memberCount: joinResult.memberList.length,
-        maxMembers: 4,
+        maxMembers: 3,
         members: joinResult.memberList.map((m) => m.name),
         currentMember: cleanMemberName,
       },
@@ -115,7 +164,7 @@ export async function POST(req: Request) {
     if (err.message === "TEAM_FULL") {
       return NextResponse.json(
         {
-          error: "TEAM FULL: This team already has 4 members.",
+          error: "TEAM FULL: This team already has 3 members. Maximum 3 members allowed per team.",
           code: "TEAM_FULL",
         },
         { status: 400 }

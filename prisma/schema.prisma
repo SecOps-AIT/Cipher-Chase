@@ -1,6 +1,7 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -29,6 +30,9 @@ model Team {
   scoreReachedAt    DateTime?
   wallet            Int                    @default(0)
   qualified         Boolean                @default(false)
+  round1StartedAt   DateTime?
+  round1DeadlineAt  DateTime?
+  round1Duration    Int                    @default(1800) // seconds, default 30 minutes
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
   members           TeamMember[]
@@ -39,7 +43,10 @@ model Team {
 
   @@unique([eventId, joinCode])
   @@unique([eventId, name])
-  @@index([eventId, score, scoreReachedAt])
+  @@index([eventId, score(sort: Desc), scoreReachedAt(sort: Asc)])
+  @@index([eventId])
+  @@index([joinCode])
+  @@index([round1DeadlineAt])
 }
 
 model TeamMember {
@@ -47,9 +54,11 @@ model TeamMember {
   teamId    String
   team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   name      String
+  phone     String?  // Optional for regular members, required for team lead
+  email     String?  // Optional for regular members, required for team lead
+  isLeader  Boolean  @default(false) // True for team creator
   createdAt DateTime @default(now())
 
-  @@unique([teamId, name])
   @@index([teamId])
 }
 
@@ -76,7 +85,7 @@ model Question {
   roundId     String
   round       Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
   title       String
-  description String
+  description String       @db.Text
   answer      String
   points          Int          @default(100)
   firstBloodBonus Int          @default(50)
@@ -94,6 +103,9 @@ model Question {
 
   @@index([roundId, batchNumber, order])
   @@index([roundId, order])
+  @@index([roundId, isActive])
+  @@index([releaseAt])
+  @@index([closeAt])
 }
 
 model Submission {
@@ -111,6 +123,8 @@ model Submission {
   @@index([teamId, questionId])
   @@index([teamId, questionId, isCorrect])
   @@index([questionId, isCorrect])
+  @@index([submittedAt])
+  @@index([teamId, submittedAt])
 }
 
 model ScoreEvent {
@@ -128,6 +142,8 @@ model ScoreEvent {
 
   @@index([eventId, teamId])
   @@index([teamId, createdAt])
+  @@index([eventId, createdAt])
+  @@index([type])
 }
 
 model AuctionChallenge {
@@ -135,7 +151,7 @@ model AuctionChallenge {
   roundId          String
   round            Round                  @relation(fields: [roundId], references: [id], onDelete: Cascade)
   title            String
-  description      String
+  description      String                 @db.Text
   basePoints       Int                    @default(200)
   status           String                 @default("DRAFT") // DRAFT, READY, LIVE, COMPLETED, FAILED
   winningTeamId    String?
@@ -159,7 +175,7 @@ model Hint {
   challengeId String
   challenge   AuctionChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   title       String
-  content     String
+  content     String            @db.Text
   cost        Int               @default(50)
   order       Int               @default(0)
   claims      HintClaim[]
@@ -205,7 +221,7 @@ model AuditLog {
   teamId    String?
   actor     String   @default("SYSTEM") // ADMIN, TEAM, SYSTEM
   action    String
-  details   String?
+  details   String?  @db.Text
   createdAt DateTime @default(now())
 
   @@index([eventId, createdAt])

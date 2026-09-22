@@ -187,7 +187,7 @@ export default function AdminTeamsPage() {
           </span>
           <h1 className="text-2xl font-bold font-mono text-white">TEAM REGISTRY</h1>
           <p className="text-xs text-slate-400 mt-1 font-mono">
-            Total Teams: {teams.length} | Capacity: 1–4 members per team
+            Total Teams: {teams.length} | Capacity: 1–3 members per team
           </p>
         </div>
 
@@ -237,7 +237,7 @@ export default function AdminTeamsPage() {
               ) : (
                 teams.map((team) => {
                   const memberCount = team.members?.length || 0;
-                  const isFull = memberCount >= 4;
+                  const isFull = memberCount >= 3;
 
                   return (
                     <tr key={team.id} className="hover:bg-slate-800/30 transition-colors">
@@ -279,7 +279,7 @@ export default function AdminTeamsPage() {
                                 : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                             }`}
                           >
-                            {memberCount} / 4 {isFull ? "FULL" : "MEMBERS"}
+                            {memberCount} / 3 {isFull ? "FULL" : "MEMBERS"}
                           </span>
 
                           {!isFull && (
@@ -381,7 +381,7 @@ export default function AdminTeamsPage() {
               <div>
                 <h3 className="text-lg font-bold font-mono text-white">CREATE NEW TEAM</h3>
                 <p className="text-xs text-slate-400">
-                  Pre-create team. Max 4 members supported per team.
+                  Pre-create team. Max 3 members supported per team.
                 </p>
               </div>
             </div>

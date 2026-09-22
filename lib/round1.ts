@@ -42,6 +42,14 @@ export interface Round1TeamResponse {
     startedAt: Date | null;
     endedAt: Date | null;
   } | null;
+  teamTimer: {
+    started: boolean;
+    startedAt: Date | null;
+    deadlineAt: Date | null;
+    duration: number;
+    secondsRemaining: number;
+    status: "NOT_STARTED" | "ACTIVE" | "EXPIRED";
+  };
   batchInfo: {
     currentBatch: number;
     totalBatches: number;
@@ -58,6 +66,31 @@ export async function getRound1QuestionsForTeam(
 ): Promise<Round1TeamResponse> {
   const now = new Date();
 
+  // Get team timer data if teamId provided
+  let team: { round1StartedAt: Date | null; round1DeadlineAt: Date | null; round1Duration: number } | null = null;
+  if (teamId) {
+    team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: {
+        round1StartedAt: true,
+        round1DeadlineAt: true,
+        round1Duration: true,
+      },
+    });
+  }
+
+  // Calculate team timer status
+  const teamTimerNotStarted = !team || !team.round1StartedAt || !team.round1DeadlineAt;
+  const teamTimerSecondsRemaining = teamTimerNotStarted || !team
+    ? 0
+    : Math.max(0, Math.floor((team.round1DeadlineAt!.getTime() - now.getTime()) / 1000));
+  const teamTimerExpired = !teamTimerNotStarted && teamTimerSecondsRemaining <= 0;
+  const teamTimerStatus: "NOT_STARTED" | "ACTIVE" | "EXPIRED" = teamTimerNotStarted
+    ? "NOT_STARTED"
+    : teamTimerExpired
+    ? "EXPIRED"
+    : "ACTIVE";
+
   // Find Round 1
   const round = await prisma.round.findFirst({
     where: { number: 1 },
@@ -67,6 +100,14 @@ export async function getRound1QuestionsForTeam(
   if (!round) {
     return {
       round: null,
+      teamTimer: {
+        started: false,
+        startedAt: null,
+        deadlineAt: null,
+        duration: 1800,
+        secondsRemaining: 0,
+        status: "NOT_STARTED",
+      },
       batchInfo: {
         currentBatch: 1,
         totalBatches: 1,
@@ -175,9 +216,13 @@ export async function getRound1QuestionsForTeam(
     const isSolved = solvedQuestionIds.has(q.id);
     const teamStatus: "SOLVED" | "UNSOLVED" = isSolved ? "SOLVED" : "UNSOLVED";
 
+    // Apply team timer logic: if team timer expired, questions become CLOSED
     let status: "LOCKED" | "LIVE" | "CLOSED" | "SOLVED" = "LOCKED";
     if (isSolved) {
       status = "SOLVED";
+    } else if (teamTimerExpired) {
+      // Team timer expired - all questions freeze
+      status = "CLOSED";
     } else if (globalStatus === "UPCOMING") {
       status = "LOCKED";
     } else if (globalStatus === "EXPIRED") {
@@ -222,6 +267,14 @@ export async function getRound1QuestionsForTeam(
       status: round.status,
       startedAt: round.startedAt,
       endedAt: round.endedAt,
+    },
+    teamTimer: {
+      started: !teamTimerNotStarted,
+      startedAt: team?.round1StartedAt || null,
+      deadlineAt: team?.round1DeadlineAt || null,
+      duration: team?.round1Duration || 1800,
+      secondsRemaining: teamTimerSecondsRemaining,
+      status: teamTimerStatus,
     },
     batchInfo: {
       currentBatch,
@@ -269,6 +322,16 @@ export async function submitRound1Answer({
   });
   if (!team) {
     return { success: false, message: "Team not found." };
+  }
+
+  // Check team timer status
+  if (team.round1StartedAt && team.round1DeadlineAt) {
+    if (now >= team.round1DeadlineAt) {
+      return {
+        success: false,
+        message: "Your team's Round 1 timer has expired. No further submissions accepted.",
+      };
+    }
   }
 
   // Fetch question & round
@@ -335,118 +398,133 @@ export async function submitRound1Answer({
   }
 
   // 5. Execute in database transaction to eliminate race conditions (Section 13)
-  const outcome = await prisma.$transaction(
-    async (tx) => {
-      // Check if team already solved this question
-      const existingSolve = await tx.submission.findFirst({
-        where: {
-          teamId,
-          questionId,
-          isCorrect: true,
-        },
-      });
+  try {
+    const outcome = await prisma.$transaction(
+      async (tx) => {
+        // Check if team already solved this question (within transaction for isolation)
+        const existingSolve = await tx.submission.findFirst({
+          where: {
+            teamId,
+            questionId,
+            isCorrect: true,
+          },
+        });
 
-      if (existingSolve) {
-        return {
-          success: false,
-          alreadySolved: true,
-          message: "This question has already been solved by your team.",
-        };
-      }
+        if (existingSolve) {
+          return {
+            success: false,
+            alreadySolved: true,
+            message: "This question has already been solved by your team.",
+          };
+        }
 
-      // Check if this is the FIRST BLOOD across ALL teams globally
-      const globalFirstSolve = await tx.submission.findFirst({
-        where: {
-          questionId,
-          isCorrect: true,
-        },
-      });
+        // Check if this is the FIRST BLOOD across ALL teams globally
+        const globalFirstSolve = await tx.submission.findFirst({
+          where: {
+            questionId,
+            isCorrect: true,
+          },
+        });
 
-      const isFirstBlood = !globalFirstSolve;
-      const firstBloodBonus = isFirstBlood ? (question.firstBloodBonus || 50) : 0;
-      const totalPointsAwarded = isMatch ? (question.points + firstBloodBonus) : 0;
+        const isFirstBlood = !globalFirstSolve;
+        const firstBloodBonus = isFirstBlood ? (question.firstBloodBonus || 50) : 0;
+        const totalPointsAwarded = isMatch ? (question.points + firstBloodBonus) : 0;
 
-      // Record submission attempt
-      await tx.submission.create({
-        data: {
-          teamId,
-          questionId,
-          submittedAnswer: cleanAnswer,
-          isCorrect: isMatch,
-          isFirstBlood: isMatch ? isFirstBlood : false,
-          submittedAt: now,
-          submittedBy: memberName,
-        },
-      });
-
-      if (isMatch) {
-        // First correct submission by team: awards points
-        await tx.scoreEvent.create({
+        // Record submission attempt
+        await tx.submission.create({
           data: {
-            eventId: team.eventId,
-            teamId: team.id,
-            roundId: round.id,
-            type: isFirstBlood ? "ROUND1_FIRST_BLOOD" : "ROUND1_CORRECT",
+            teamId,
+            questionId,
+            submittedAnswer: cleanAnswer,
+            isCorrect: isMatch,
+            isFirstBlood: isMatch ? isFirstBlood : false,
+            submittedAt: now,
+            submittedBy: memberName,
+          },
+        });
+
+        if (isMatch) {
+          // First correct submission by team: awards points
+          await tx.scoreEvent.create({
+            data: {
+              eventId: team.eventId,
+              teamId: team.id,
+              roundId: round.id,
+              type: isFirstBlood ? "ROUND1_FIRST_BLOOD" : "ROUND1_CORRECT",
+              points: totalPointsAwarded,
+              reason: isFirstBlood
+                ? `First Blood 🩸: ${question.title} (+${question.points} + ${firstBloodBonus} FB bonus)`
+                : `Round 1 solved: ${question.title} (+${question.points} pts)`,
+              createdAt: now,
+            },
+          });
+
+          await tx.team.update({
+            where: { id: teamId },
+            data: {
+              score: { increment: totalPointsAwarded },
+              scoreReachedAt: now,
+            },
+          });
+
+          return {
+            success: true,
+            isCorrect: true,
+            isFirstBlood,
+            firstBloodBonus,
             points: totalPointsAwarded,
-            reason: isFirstBlood
-              ? `First Blood 🩸: ${question.title} (+${question.points} + ${firstBloodBonus} FB bonus)`
-              : `Round 1 solved: ${question.title} (+${question.points} pts)`,
-            createdAt: now,
-          },
-        });
-
-        await tx.team.update({
-          where: { id: teamId },
-          data: {
-            score: { increment: totalPointsAwarded },
-            scoreReachedAt: now,
-          },
-        });
-
-        return {
-          success: true,
-          isCorrect: true,
-          isFirstBlood,
-          firstBloodBonus,
-          points: totalPointsAwarded,
-          message: isFirstBlood
-            ? `🩸 FIRST BLOOD! You were the first team to solve ${question.title}! (+${question.points} + ${firstBloodBonus} bonus)`
-            : `Correct flag! (+${question.points} pts awarded to your team)`,
-        };
-      } else {
-        return {
-          success: true,
-          isCorrect: false,
-          points: 0,
-          message: "Incorrect flag. Try again!",
-        };
+            message: isFirstBlood
+              ? `🩸 FIRST BLOOD! You were the first team to solve ${question.title}! (+${question.points} + ${firstBloodBonus} bonus)`
+              : `Correct flag! (+${question.points} pts awarded to your team)`,
+          };
+        } else {
+          return {
+            success: true,
+            isCorrect: false,
+            points: 0,
+            message: "Incorrect flag. Try again!",
+          };
+        }
+      },
+      { 
+        maxWait: 10000, 
+        timeout: 15000,
+        isolationLevel: "Serializable" // Highest isolation level for PostgreSQL
       }
-    },
-    { maxWait: 10000, timeout: 15000 }
-  );
+    );
 
-  // Non-blocking audit logging after transaction commits (prevents SQLite locking)
-  if (outcome.success && outcome.isCorrect) {
-    logAuditEvent({
-      eventId: team.eventId,
-      teamId: team.id,
-      actor: "TEAM",
-      action: outcome.isFirstBlood ? "FIRST_BLOOD_CLAIMED" : "QUESTION_SOLVED",
-      details: outcome.isFirstBlood
-        ? `🩸 Team ${team.name} (${memberName || "Member"}) scored FIRST BLOOD on ${question.title} (+${outcome.points} pts)`
-        : `Team ${team.name} (${memberName || "Member"}) solved ${question.title} (+${question.points} pts)`,
-    }).catch(console.error);
-  } else if (outcome.success && !outcome.isCorrect) {
-    logAuditEvent({
-      eventId: team.eventId,
-      teamId: team.id,
-      actor: "TEAM",
-      action: "INCORRECT_ATTEMPT",
-      details: `Team ${team.name} (${memberName || "Member"}) incorrect attempt on ${question.title}`,
-    }).catch(console.error);
+    // Non-blocking audit logging after transaction commits
+    if (outcome.success && outcome.isCorrect) {
+      logAuditEvent({
+        eventId: team.eventId,
+        teamId: team.id,
+        actor: "TEAM",
+        action: outcome.isFirstBlood ? "FIRST_BLOOD_CLAIMED" : "QUESTION_SOLVED",
+        details: outcome.isFirstBlood
+          ? `🩸 Team ${team.name} (${memberName || "Member"}) scored FIRST BLOOD on ${question.title} (+${outcome.points} pts)`
+          : `Team ${team.name} (${memberName || "Member"}) solved ${question.title} (+${question.points} pts)`,
+      }).catch(console.error);
+    } else if (outcome.success && !outcome.isCorrect) {
+      logAuditEvent({
+        eventId: team.eventId,
+        teamId: team.id,
+        actor: "TEAM",
+        action: "INCORRECT_ATTEMPT",
+        details: `Team ${team.name} (${memberName || "Member"}) incorrect attempt on ${question.title}`,
+      }).catch(console.error);
+    }
+
+    return outcome;
+  } catch (error: any) {
+    // Handle transaction conflicts gracefully
+    if (error.code === 'P2034' || error.message?.includes('serialization')) {
+      return {
+        success: false,
+        message: "Concurrent submission detected. Please try again.",
+      };
+    }
+    throw error;
   }
-
-  return outcome;
 }
 
 // Function to fetch detailed question statistics for the admin modal (Section 19)
