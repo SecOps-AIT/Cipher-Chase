@@ -343,34 +343,55 @@ describe("Cipher Chase — Team System & Round 1 Core Logic", () => {
     });
   });
 
-  describe("Batch Scheduling Windows (Section 7)", () => {
-    const calculateBatchWindows = (now: Date, durationMinutes: number, totalBatches: number) => {
-      const ms = durationMinutes * 60 * 1000;
-      const batches = [];
-      for (let i = 0; i < totalBatches; i++) {
-        const releaseAt = new Date(now.getTime() + i * ms);
-        const closeAt = new Date(now.getTime() + (i + 1) * ms);
-        batches.push({ batchNumber: i + 1, releaseAt, closeAt });
-      }
-      return batches;
+  describe("Core and Backup Question System", () => {
+    const createCoreBackupQuestions = (roundId: string) => {
+      const coreQuestions = Array.from({ length: 20 }, (_, i) => ({
+        id: `q-core-${i + 1}`,
+        roundId,
+        title: `Core Question ${i + 1}`,
+        order: i + 1,
+        isCore: true,
+        isReleased: true,
+        isActive: true,
+      }));
+      
+      const backupQuestions = Array.from({ length: 10 }, (_, i) => ({
+        id: `q-backup-${i + 21}`,
+        roundId,
+        title: `Backup Question ${i + 21}`,
+        order: i + 21,
+        isCore: false,
+        isReleased: false, // Backup questions start as not released
+        isActive: true,
+      }));
+      
+      return { coreQuestions, backupQuestions };
     };
 
-    it("creates sequential, non-overlapping batch windows starting from now", () => {
-      const now = new Date("2026-09-19T14:00:00Z");
-      const windows = calculateBatchWindows(now, 15, 3);
+    it("creates 20 core questions available immediately", () => {
+      const roundId = "round-1-test";
+      const { coreQuestions } = createCoreBackupQuestions(roundId);
 
-      expect(windows).toHaveLength(3);
-      // Batch 1: 14:00 to 14:15
-      expect(windows[0].releaseAt.toISOString()).toBe("2026-09-19T14:00:00.000Z");
-      expect(windows[0].closeAt.toISOString()).toBe("2026-09-19T14:15:00.000Z");
+      expect(coreQuestions).toHaveLength(20);
+      coreQuestions.forEach((q, index) => {
+        expect(q.order).toBe(index + 1);
+        expect(q.isCore).toBe(true);
+        expect(q.isReleased).toBe(true);
+        expect(q.title).toBe(`Core Question ${index + 1}`);
+      });
+    });
 
-      // Batch 2: 14:15 to 14:30
-      expect(windows[1].releaseAt.toISOString()).toBe("2026-09-19T14:15:00.000Z");
-      expect(windows[1].closeAt.toISOString()).toBe("2026-09-19T14:30:00.000Z");
+    it("creates 10 backup questions that are initially locked", () => {
+      const roundId = "round-1-test";
+      const { backupQuestions } = createCoreBackupQuestions(roundId);
 
-      // Batch 3: 14:30 to 14:45
-      expect(windows[2].releaseAt.toISOString()).toBe("2026-09-19T14:30:00.000Z");
-      expect(windows[2].closeAt.toISOString()).toBe("2026-09-19T14:45:00.000Z");
+      expect(backupQuestions).toHaveLength(10);
+      backupQuestions.forEach((q, index) => {
+        expect(q.order).toBe(index + 21);
+        expect(q.isCore).toBe(false);
+        expect(q.isReleased).toBe(false); // Locked initially
+        expect(q.title).toBe(`Backup Question ${index + 21}`);
+      });
     });
   });
 

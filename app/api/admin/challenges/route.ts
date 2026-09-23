@@ -19,7 +19,7 @@ export async function GET() {
 
     const teams = await prisma.team.findMany({
       where: { qualified: true },
-      select: { id: true, name: true, wallet: true, score: true },
+      select: { id: true, name: true, score: true },
       orderBy: { score: "desc" },
     });
 

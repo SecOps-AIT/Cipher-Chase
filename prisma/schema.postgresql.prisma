@@ -20,22 +20,31 @@ model Event {
 }
 
 model Team {
-  id                String                 @id @default(cuid())
-  eventId           String
-  event             Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  name              String
-  joinCode          String
-  score             Int                    @default(0)
-  scoreReachedAt    DateTime?
-  wallet            Int                    @default(0)
-  qualified         Boolean                @default(false)
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  members           TeamMember[]
-  submissions       Submission[]
-  scoreEvents       ScoreEvent[]
-  hintClaims        HintClaim[]
-  challengeAttempts TeamChallengeAttempt[]
+  id                     String                      @id @default(cuid())
+  eventId                String
+  event                  Event                       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name                   String
+  joinCode               String
+  score                  Int                         @default(0)
+  scoreReachedAt         DateTime?
+  qualified              Boolean                     @default(false)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  
+  // Round 1 timing fields
+  round1StartedAt        DateTime?
+  round1DeadlineAt       DateTime?
+  round1Duration         Int?
+  
+  // Relations
+  members                TeamMember[]
+  submissions            Submission[]
+  scoreEvents            ScoreEvent[]
+  hintClaims             HintClaim[]
+  challengeAttempts      TeamChallengeAttempt[]
+  auctionBids            AuctionBid[]
+  auctionSales           AuctionSale[]
+  challengeAssignments   TeamChallengeAssignment[]
 
   @@unique([eventId, joinCode])
   @@unique([eventId, name])

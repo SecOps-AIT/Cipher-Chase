@@ -45,6 +45,16 @@ export default function AdminRound1ControlPage() {
   const [adjustPoints, setAdjustPoints] = useState(0);
   const [adjustReason, setAdjustReason] = useState("");
 
+  // Backup questions management
+  const [backupQuestions, setBackupQuestions] = useState<any[]>([]);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [selectedBackupIds, setSelectedBackupIds] = useState<string[]>([]);
+  const [backupStats, setBackupStats] = useState<{
+    coreCount: number;
+    backupCount: number;
+    releasedBackupCount: number;
+  }>({ coreCount: 0, backupCount: 0, releasedBackupCount: 0 });
+
   // Current time ticker
   const [now, setNow] = useState(new Date());
 
@@ -79,6 +89,51 @@ export default function AdminRound1ControlPage() {
       setLoading(false);
     }
   }, []);
+
+  // Fetch backup questions data
+  const fetchBackupQuestions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/questions/backup", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setBackupQuestions(data.backupQuestions || []);
+        setBackupStats(data.stats || { coreCount: 0, backupCount: 0, releasedBackupCount: 0 });
+      }
+    } catch (err) {
+      console.error("Error fetching backup questions:", err);
+    }
+  }, []);
+
+  // Release selected backup questions
+  const handleReleaseBackup = async () => {
+    if (selectedBackupIds.length === 0) return;
+    
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/admin/questions/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionIds: selectedBackupIds }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✅ ${data.message}`);
+        setSelectedBackupIds([]);
+        setShowBackupModal(false);
+        fetchBackupQuestions();
+        fetchData(); // Refresh main data
+      } else {
+        const error = await res.json();
+        alert(`❌ ${error.error}`);
+      }
+    } catch (err) {
+      console.error("Error releasing backup questions:", err);
+      alert("❌ Failed to release questions");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -323,6 +378,18 @@ export default function AdminRound1ControlPage() {
           >
             <PauseCircle className="w-4 h-4" />
             PAUSE
+          </button>
+
+          <button
+            onClick={() => {
+              fetchBackupQuestions();
+              setShowBackupModal(true);
+            }}
+            disabled={actionLoading}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition-colors"
+          >
+            <PlusCircle className="w-4 h-4" />
+            BACKUP QUESTIONS
           </button>
 
           <button
@@ -982,6 +1049,150 @@ export default function AdminRound1ControlPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* BACKUP QUESTIONS RELEASE MODAL */}
+      {showBackupModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowBackupModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-bold font-mono text-white mb-2">Backup Question Control</h3>
+                <p className="text-sm text-slate-400">
+                  Release backup questions (Q21-Q30) to make them available to all teams.
+                </p>
+              </div>
+
+              {/* Stats Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                  <span className="text-2xl font-bold font-mono text-cyan-400">{backupStats.coreCount}</span>
+                  <p className="text-xs text-slate-400 mt-1">Core Questions</p>
+                </div>
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                  <span className="text-2xl font-bold font-mono text-purple-400">{backupStats.releasedBackupCount}</span>
+                  <p className="text-xs text-slate-400 mt-1">Backup Released</p>
+                </div>
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
+                  <span className="text-2xl font-bold font-mono text-amber-400">{backupStats.backupCount - backupStats.releasedBackupCount}</span>
+                  <p className="text-xs text-slate-400 mt-1">Backup Locked</p>
+                </div>
+              </div>
+
+              {/* Backup Questions List */}
+              <div>
+                <h4 className="text-sm font-bold text-white mb-3">Available Backup Questions</h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {backupQuestions.filter(q => !q.isReleased).map((q) => (
+                    <label
+                      key={q.id}
+                      className="flex items-center gap-3 p-3 border border-slate-800 rounded-lg hover:border-purple-500/50 transition-colors cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBackupIds.includes(q.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedBackupIds(prev => [...prev, q.id]);
+                          } else {
+                            setSelectedBackupIds(prev => prev.filter(id => id !== q.id));
+                          }
+                        }}
+                        className="w-4 h-4 text-purple-600 bg-slate-950 border-slate-700 rounded focus:ring-purple-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-mono text-white">
+                            Q{q.order.toString().padStart(2, "0")} — {q.title}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            q.difficulty === "EASY" 
+                              ? "bg-cyan-500/20 text-cyan-300"
+                              : q.difficulty === "MEDIUM"
+                              ? "bg-amber-500/20 text-amber-300"
+                              : "bg-rose-500/20 text-rose-300"
+                          }`}>
+                            {q.difficulty}
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">+{q.points} pts</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{q.category}</p>
+                      </div>
+                      <Lock className="w-4 h-4 text-amber-400" />
+                    </label>
+                  ))}
+                  
+                  {backupQuestions.filter(q => !q.isReleased).length === 0 && (
+                    <div className="text-center py-8 text-slate-500 text-sm">
+                      All backup questions have been released.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Already Released Questions */}
+              {backupQuestions.filter(q => q.isReleased).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-bold text-white mb-3">Already Released</h4>
+                  <div className="space-y-2">
+                    {backupQuestions.filter(q => q.isReleased).map((q) => (
+                      <div
+                        key={q.id}
+                        className="flex items-center gap-3 p-3 border border-emerald-800/50 bg-emerald-950/20 rounded-lg"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-mono text-white">
+                              Q{q.order.toString().padStart(2, "0")} — {q.title}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              q.difficulty === "EASY" 
+                                ? "bg-cyan-500/20 text-cyan-300"
+                                : q.difficulty === "MEDIUM"
+                                ? "bg-amber-500/20 text-amber-300"
+                                : "bg-rose-500/20 text-rose-300"
+                            }`}>
+                              {q.difficulty}
+                            </span>
+                            <span className="text-xs font-mono text-slate-400">+{q.points} pts</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">{q.category}</p>
+                        </div>
+                        <span className="text-xs text-emerald-400 font-mono">LIVE</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowBackupModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReleaseBackup}
+                  disabled={selectedBackupIds.length === 0 || actionLoading}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-mono font-bold rounded-xl transition-colors"
+                >
+                  {actionLoading ? "Releasing..." : `Release ${selectedBackupIds.length} Question${selectedBackupIds.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

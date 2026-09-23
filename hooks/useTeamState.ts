@@ -9,7 +9,6 @@ export interface TeamState {
     name: string;
     joinCode: string;
     score: number;
-    wallet: number;
     qualified: boolean;
     members: string[];
     memberCount: number;

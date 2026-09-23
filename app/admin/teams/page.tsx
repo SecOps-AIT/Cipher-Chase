@@ -423,7 +423,7 @@ export default function AdminTeamsPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="Leave empty for auto-generated CC-XXXXX"
+                  placeholder="Leave empty for auto-generated CC26XX (e.g. CC2613)"
                   value={customJoinCode}
                   onChange={(e) => setCustomJoinCode(e.target.value.toUpperCase())}
                   className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm uppercase focus:outline-none focus:border-cyan-400"

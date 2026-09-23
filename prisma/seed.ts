@@ -9,6 +9,7 @@ async function main() {
   await prisma.auditLog.deleteMany();
   await prisma.teamChallengeAttempt.deleteMany();
   await prisma.hintClaim.deleteMany();
+  await prisma.questionHint.deleteMany();
   await prisma.hint.deleteMany();
   await prisma.auctionChallenge.deleteMany();
   await prisma.scoreEvent.deleteMany();
@@ -34,27 +35,27 @@ async function main() {
     {
       name: "Cyber Wolves",
       joinCode: "CC-7X4K9",
-      members: ["Anagesh", "Arun", "Vishnu", "Priya"],
+      members: [{ name: "Anagesh", isLeader: true }, { name: "Arun", isLeader: false }, { name: "Vishnu", isLeader: false }],
     },
     {
-      name: "Null Squad",
+      name: "Null Squad", 
       joinCode: "CC-9B2M7",
-      members: ["Rohan", "Karthik", "Sneha", "Aditya"],
+      members: [{ name: "Rohan", isLeader: true }, { name: "Karthik", isLeader: false }, { name: "Sneha", isLeader: false }],
     },
     {
       name: "Root Access",
       joinCode: "CC-4T8W1",
-      members: ["Vikram", "Deepak", "Meera", "Siddharth"],
+      members: [{ name: "Vikram", isLeader: true }, { name: "Deepak", isLeader: false }, { name: "Meera", isLeader: false }],
     },
     {
       name: "Byte Force",
       joinCode: "CC-6K3R5",
-      members: ["Rahul", "Naveen", "Swathi"],
+      members: [{ name: "Rahul", isLeader: true }, { name: "Naveen", isLeader: false }, { name: "Swathi", isLeader: false }],
     },
     {
       name: "Hex Raiders",
       joinCode: "CC-2P9Y4",
-      members: ["Tanvi", "Akash", "Varun"],
+      members: [{ name: "Tanvi", isLeader: true }, { name: "Akash", isLeader: false }],
     },
   ];
 
@@ -65,57 +66,36 @@ async function main() {
         name: t.name,
         joinCode: t.joinCode,
         score: 0,
-        wallet: 0,
         qualified: false,
+        round1Duration: 1800, // 30 minutes default
         members: {
-          create: t.members.map((name) => ({ name })),
+          create: t.members,
         },
       },
     });
     console.log(`Created Team: ${createdTeam.name} with code [${createdTeam.joinCode}]`);
   }
 
-  // 3. Create Round 1: Themed CTF
-  const now = new Date();
+  // 3. Create Round 1: Themed CTF  
   const round1 = await prisma.round.create({
     data: {
       eventId: event.id,
       name: "Round 1 — Themed CTF",
       number: 1,
       status: "LIVE",
-      startedAt: now,
+      startedAt: new Date(),
     },
   });
 
-  // Questions release batches:
-  // Batch 1 (Q1-Q5): Released 5 mins ago, Closes in 15 mins (CURRENTLY ACTIVE)
-  // Batch 2 (Q6-Q10): Releases in 10 mins, Closes in 25 mins (UPCOMING)
-  // Batch 3 (Q11-Q15): Releases in 20 mins, Closes in 35 mins (UPCOMING)
-
-  const b1Release = now;
-  const b1Close = new Date(now.getTime() + 30 * 60 * 1000);
-
-  const b2Release = new Date(now.getTime() + 30 * 60 * 1000);
-  const b2Close = new Date(now.getTime() + 60 * 60 * 1000);
-
-  const b3Release = new Date(now.getTime() + 60 * 60 * 1000);
-  const b3Close = new Date(now.getTime() + 90 * 60 * 1000);
-
-  const sampleQuestions = [
-    // Batch 1 (Active)
+  // CORE QUESTIONS (Q01-Q20) - Available immediately
+  const coreQuestions = [
     {
-      roundId: round1.id,
       title: "Q01 — Base64 Radio Beacon",
       description: "A radio broadcast intercepted on frequency 433.92MHz contains a repeating message encoded in base64: `Q0N7YmFzZTY0X3JhZGlvX2JlYWNvbl8yMDI2X2ZvdW5kfQ==`. Decode the transmission to recover the flag.",
       answer: "CC{base64_radio_beacon_2026_found}",
       points: 100,
-      firstBloodBonus: 50,
       difficulty: "EASY",
       category: "Cryptography",
-      releaseAt: b1Release,
-      closeAt: b1Close,
-      batchNumber: 1,
-      answerMode: "TRIMMED",
       order: 1,
     },
     {

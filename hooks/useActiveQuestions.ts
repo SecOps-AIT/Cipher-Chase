@@ -20,14 +20,10 @@ interface QuestionsResponse {
     secondsRemaining: number;
     status: "NOT_STARTED" | "ACTIVE" | "EXPIRED";
   };
-  batchInfo: {
-    currentBatch: number;
-    totalBatches: number;
-    activeQuestionsCount: number;
-    batchCloseAt: string | null;
-    secondsRemaining: number;
-  };
   questions: QuestionView[];
+  coreCount: number;
+  backupCount: number;
+  releasedBackupCount: number;
   serverTime: string;
 }
 

@@ -24,7 +24,6 @@ export async function GET() {
         name: t.name,
         joinCode: t.joinCode,
         score: t.score,
-        wallet: t.wallet,
         qualified: t.qualified,
         members: t.members.map((m) => ({ id: m.id, name: m.name })),
         solvesCount: t.submissions.length,

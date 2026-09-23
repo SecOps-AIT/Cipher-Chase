@@ -13,16 +13,17 @@ import {
   History,
   LogOut,
   ExternalLink,
+  Activity,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/teams", label: "Teams", icon: Users },
-  { href: "/admin/questions", label: "Questions", icon: FileQuestion },
-  { href: "/admin/round-1", label: "Round 1 CTF", icon: PlayCircle },
-  { href: "/admin/auction", label: "Round 2 Auction", icon: Gavel },
-  { href: "/admin/qualification", label: "Qualification", icon: Calculator },
-  { href: "/admin/audit", label: "Audit Logs", icon: History },
+  { href: "/admin", label: "OVERVIEW", icon: LayoutDashboard },
+  { href: "/admin/teams", label: "TEAMS REGISTRY", icon: Users },
+  { href: "/admin/questions", label: "QUESTIONS BANK", icon: FileQuestion },
+  { href: "/admin/round-1", label: "ROUND 1 CONTROL", icon: PlayCircle },
+  { href: "/admin/auction", label: "ROUND 2 AUCTION", icon: Gavel },
+  { href: "/admin/qualification", label: "QUALIFICATION", icon: Calculator },
+  { href: "/admin/audit", label: "AUDIT LOGS", icon: History },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -40,25 +41,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="min-h-screen bg-cyber-darker text-slate-100 flex flex-col md:flex-row">
+    <div className="min-h-screen vault-bg text-slate-100 flex flex-col md:flex-row">
       {/* Admin Sidebar */}
-      <aside className="w-full md:w-64 bg-slate-950 border-r border-slate-800 p-5 flex flex-col justify-between shrink-0">
+      <aside className="w-full md:w-64 bg-[#070B12] border-r border-[#1E293B] p-5 flex flex-col justify-between shrink-0">
         <div>
           {/* Brand */}
           <div className="flex items-center space-x-3 mb-8">
-            <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
+            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
               <Shield className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold font-mono text-white tracking-wider">CIPHER CHASE</h2>
-              <span className="text-[10px] font-mono text-cyan-400 tracking-widest uppercase">
-                CONTROL PANEL
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs font-black font-mono text-white tracking-widest">
+                  CIPHER CHASE
+                </h2>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-fast" />
+              </div>
+              <span className="text-[9px] font-mono text-cyan-400 tracking-widest uppercase block -mt-0.5">
+                SEC-OPS COMMAND
               </span>
             </div>
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-1">
+          <nav className="space-y-1.5">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -66,10 +72,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-mono text-xs tracking-wider transition-colors ${
+                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg font-mono text-xs tracking-wider transition-all ${
                     isActive
-                      ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 font-bold"
-                      : "text-slate-400 hover:text-white hover:bg-slate-900"
+                      ? "bg-cyan-950/40 border border-cyan-500/40 text-cyan-300 font-bold border-l-2 border-l-cyan-400 shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-900/60 border border-transparent"
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? "text-cyan-400" : "text-slate-500"}`} />
@@ -80,33 +86,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         </div>
 
-        {/* Bottom Actions */}
-        <div className="pt-6 border-t border-slate-800/80 space-y-2">
+        {/* Bottom Actions & System Status */}
+        <div className="pt-6 border-t border-[#1E293B] space-y-2">
+          <div className="px-3 py-1.5 rounded bg-[#05070B] border border-slate-800 text-[10px] font-mono text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              TELEMETRY
+            </span>
+            <span className="text-emerald-400 font-bold">ONLINE</span>
+          </div>
+
           <Link
             href="/leaderboard"
             target="_blank"
-            className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-mono text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
           >
             <span className="flex items-center gap-2">
               <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-              Leaderboard
+              LIVE SCOREBOARD
             </span>
           </Link>
 
           <button
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-mono text-rose-400 hover:bg-rose-500/10 transition-colors"
+            className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-mono text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
+            <span>DISCONNECT</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <main className="p-6 md:p-8 max-w-7xl w-full mx-auto">{children}</main>
-      </div>
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+        {children}
+      </main>
     </div>
   );
 }

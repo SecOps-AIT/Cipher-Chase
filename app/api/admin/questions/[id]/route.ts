@@ -33,24 +33,41 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ error: "Question not found" }, { status: 404 });
     }
 
-    // Action: Close question immediately
-    if (body.action === "CLOSE") {
+    // Action: Release backup question (if it's a backup question)
+    if (body.action === "RELEASE" && !question.isCore) {
       const updated = await prisma.question.update({
         where: { id: params.id },
-        data: { closeAt: new Date() },
+        data: { isReleased: true },
       });
 
       await logAuditEvent({
         eventId: question.round.eventId,
         actor: "ADMIN",
-        action: "QUESTION_CLOSED",
-        details: `Question "${question.title}" manually closed by admin.`,
+        action: "BACKUP_QUESTION_RELEASED",
+        details: `Backup question "${question.title}" (Q${question.order.toString().padStart(2, '0')}) released by admin.`,
       });
 
       return NextResponse.json({ success: true, question: updated });
     }
 
-    // Update general fields
+    // Action: Lock backup question (if it's a backup question)
+    if (body.action === "LOCK" && !question.isCore) {
+      const updated = await prisma.question.update({
+        where: { id: params.id },
+        data: { isReleased: false },
+      });
+
+      await logAuditEvent({
+        eventId: question.round.eventId,
+        actor: "ADMIN",
+        action: "BACKUP_QUESTION_LOCKED",
+        details: `Backup question "${question.title}" (Q${question.order.toString().padStart(2, '0')}) locked by admin.`,
+      });
+
+      return NextResponse.json({ success: true, question: updated });
+    }
+
+    // Update general fields (for question editing)
     const updateData: any = {};
     if (body.title) updateData.title = body.title.trim();
     if (body.description) updateData.description = body.description.trim();
@@ -58,10 +75,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (body.points) updateData.points = Number(body.points);
     if (body.difficulty) updateData.difficulty = body.difficulty;
     if (body.category) updateData.category = body.category.trim();
-    if (body.batchNumber) updateData.batchNumber = Number(body.batchNumber);
     if (body.answerMode) updateData.answerMode = body.answerMode;
-    if (body.releaseAt) updateData.releaseAt = new Date(body.releaseAt);
-    if (body.closeAt) updateData.closeAt = new Date(body.closeAt);
+    if (typeof body.isCore === 'boolean') updateData.isCore = body.isCore;
+    if (typeof body.isReleased === 'boolean') updateData.isReleased = body.isReleased;
 
     const updated = await prisma.question.update({
       where: { id: params.id },
@@ -72,7 +88,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       eventId: question.round.eventId,
       actor: "ADMIN",
       action: "QUESTION_UPDATED",
-      details: `Question "${question.title}" was updated by admin.`,
+      details: `Question "${question.title}" (Q${question.order.toString().padStart(2, '0')}) was updated by admin.`,
     });
 
     return NextResponse.json({ success: true, question: updated });
@@ -99,7 +115,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
       eventId: q.round.eventId,
       actor: "ADMIN",
       action: "QUESTION_DELETED",
-      details: `Question "${q.title}" was deleted.`,
+      details: `Question "${q.title}" (Q${q.order.toString().padStart(2, '0')}) was deleted.`,
     });
 
     return NextResponse.json({ success: true, message: "Question deleted" });

@@ -3,14 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Trophy,
-  Sparkles,
   CheckCircle2,
   AlertCircle,
   Shield,
   Layers,
   ArrowRight,
   Users,
-  Wallet,
+  Check,
+  Sparkles,
 } from "lucide-react";
 
 export default function AdminQualificationPage() {
@@ -49,7 +49,7 @@ export default function AdminQualificationPage() {
 
     if (
       !confirm(
-        `Are you sure you want to qualify the TOP ${topCount} teams? This will finalize Round 1 rankings, mark qualified = true, and initialize their Round 2 wallet equal to their Round 1 score.`
+        `Are you sure you want to qualify the TOP ${topCount} teams? This will finalize Round 1 rankings and mark them as qualified for Round 2 Time Auction.`
       )
     ) {
       return;
@@ -69,7 +69,7 @@ export default function AdminQualificationPage() {
       if (!res.ok) throw new Error(data.error || "Qualification failed");
 
       setSuccessMessage(
-        `Successfully qualified Top ${data.qualifiedCount} teams! Round 2 wallets initialized.`
+        `Successfully qualified Top ${data.qualifiedCount} teams for Round 2 Time Auction!`
       );
       fetchStandings();
     } catch (err: any) {
@@ -80,14 +80,16 @@ export default function AdminQualificationPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1E293B] pb-6">
         <div>
-          <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">
+          <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest block">
             STAGE PROGRESSION & ADVANCEMENT
           </span>
-          <h1 className="text-2xl font-bold font-mono text-white">ROUND 1 — QUALIFICATION</h1>
+          <h1 className="text-2xl font-black font-mono text-white tracking-wide mt-0.5">
+            ROUND 1 — QUALIFICATION CONTROL
+          </h1>
         </div>
       </div>
 
@@ -99,70 +101,71 @@ export default function AdminQualificationPage() {
       )}
 
       {/* Qualification Control Card */}
-      <div className="p-6 bg-slate-900/80 border border-slate-800 rounded-2xl space-y-5">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-400">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold font-mono text-white">
-              ROUND 2 ADVANCEMENT CONTROL
-            </h3>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
-              Select the cutoff rank for teams advancing to Round 2 (Cyber Auction).
+      <div className="p-6 bg-[#090D16] border border-[#1E293B] rounded-2xl relative corner-frame">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              <h2 className="text-sm font-bold font-mono text-white tracking-wider uppercase">
+                ADVANCE TOP UNITS TO ROUND 2
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400 max-w-xl">
+              Select the cutoff rank for teams advancing to Round 2 (Time Auction). Qualifying teams marks Round 1 as FINISHED and unlocks Round 2 access for qualifiers.
             </p>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-4 pt-2">
-          <div className="flex items-center space-x-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2">
-            <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-              QUALIFY TOP:
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={leaderboard.length || 10}
-              value={topCount}
-              onChange={(e) => setTopCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-center font-mono font-bold text-cyan-400 focus:outline-none focus:border-cyan-500"
-            />
-            <span className="text-xs font-mono text-slate-500">TEAMS</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 bg-[#05070B] border border-slate-800 rounded-xl px-3 py-2">
+              <span className="text-xs font-mono text-slate-400">CUTOFF: TOP</span>
+              <input
+                type="number"
+                min="1"
+                max={leaderboard.length || 100}
+                value={topCount}
+                onChange={(e) => setTopCount(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-12 bg-transparent text-white font-mono font-bold text-center focus:outline-none text-sm"
+              />
+              <span className="text-xs font-mono text-slate-400">UNITS</span>
+            </div>
+
+            <button
+              onClick={handleQualify}
+              disabled={qualifying || leaderboard.length === 0}
+              className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-bold font-mono text-xs tracking-wider rounded-xl transition-all shadow-cyan-glow flex items-center gap-2 cursor-pointer"
+            >
+              {qualifying ? (
+                <span>CONFIRMING...</span>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>CONFIRM ADVANCEMENT</span>
+                </>
+              )}
+            </button>
           </div>
-
-          <button
-            onClick={handleQualify}
-            disabled={qualifying || leaderboard.length === 0}
-            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-purple-950/50"
-          >
-            <Sparkles className="w-4 h-4" />
-            {qualifying ? "QUALIFYING..." : "CONFIRM QUALIFICATION"}
-          </button>
         </div>
       </div>
 
-      {/* Final Standings Table */}
-      <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-          <h3 className="text-sm font-bold font-mono text-white uppercase tracking-wider flex items-center gap-2">
+      {/* Standings & Projected Qualifiers */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold font-mono text-slate-300 uppercase tracking-wider flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-400" />
-            FINAL RANKINGS (ROUND 1)
-          </h3>
-          <span className="text-xs font-mono text-slate-400">
-            {leaderboard.length} teams participating
-          </span>
+            STANDINGS & PROJECTED ADVANCEMENT ({leaderboard.length} UNITS REGISTERED)
+          </h2>
         </div>
 
         {loading ? (
-          <div className="py-12 text-center text-slate-500 font-mono text-sm">
-            Calculating official standings...
+          <div className="p-12 text-center text-slate-500 font-mono text-xs">
+            Syncing leaderboard standings...
           </div>
         ) : leaderboard.length === 0 ? (
-          <div className="py-12 text-center text-slate-500 font-mono text-sm">
-            No teams recorded yet.
+          <div className="p-8 text-center text-slate-500 font-mono text-xs border border-slate-800 rounded-2xl bg-[#090D16]">
+            No teams registered yet.
           </div>
         ) : (
-          <div className="space-y-2 font-mono text-xs">
+          <div className="space-y-2.5">
             {leaderboard.map((team, idx) => {
               const willQualify = idx < topCount;
               const isAlreadyQualified = team.qualified;
@@ -172,20 +175,20 @@ export default function AdminQualificationPage() {
                   key={team.teamId}
                   className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-4 transition-all ${
                     willQualify
-                      ? "bg-purple-950/20 border-purple-500/40 shadow-sm"
-                      : "bg-slate-950/60 border-slate-800/80 opacity-70"
+                      ? "bg-cyan-950/20 border-cyan-500/40 shadow-sm"
+                      : "bg-[#090D16]/60 border-[#1E293B] opacity-70"
                   }`}
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold font-mono text-xs ${
                         idx === 0
                           ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                           : idx === 1
                           ? "bg-slate-400/20 text-slate-300 border border-slate-400/40"
                           : idx === 2
                           ? "bg-amber-700/20 text-amber-500 border border-amber-700/40"
-                          : "bg-slate-900 text-slate-500 border border-slate-800"
+                          : "bg-slate-900 text-slate-400 border border-slate-800"
                       }`}
                     >
                       {team.rank}
@@ -193,35 +196,38 @@ export default function AdminQualificationPage() {
 
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">{team.teamName}</span>
+                        <span className="font-bold font-mono text-white text-sm">
+                          {team.teamName}
+                        </span>
                         {isAlreadyQualified && (
-                          <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] rounded font-bold">
+                          <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] rounded font-mono font-bold">
                             QUALIFIED
                           </span>
                         )}
                         {willQualify && !isAlreadyQualified && (
-                          <span className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/40 text-purple-300 text-[10px] rounded">
+                          <span className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] rounded font-mono">
                             PROJECTED QUALIFIER
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
-                        Code: {team.joinCode || "N/A"} • Solves: {team.solvesCount}
+                      <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 mt-1">
+                        <span className="px-1.5 py-0.5 rounded bg-[#05070B] border border-cyan-500/30 text-cyan-300 font-bold">
+                          {team.joinCode || "PENDING"}
+                        </span>
+                        <span>•</span>
+                        <span>{team.solvesCount} Solves</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-6">
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-400 uppercase block">SCORE</span>
-                      <span className="text-base font-bold text-cyan-400">{team.score} pts</span>
-                    </div>
-
-                    <div className="text-right pl-4 border-l border-slate-800">
-                      <span className="text-[10px] text-slate-400 uppercase block flex items-center gap-1">
-                        <Wallet className="w-3 h-3 text-amber-400" /> WALLET
+                      <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
+                        TOTAL SCORE
                       </span>
-                      <span className="text-base font-bold text-amber-300">{team.wallet} pts</span>
+                      <span className="text-base font-black font-mono text-cyan-400">
+                        {team.score} PTS
+                      </span>
                     </div>
                   </div>
                 </div>

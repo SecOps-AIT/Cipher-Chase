@@ -7,70 +7,68 @@ export async function qualifyTopTeams(topCount: number) {
   if (!event) throw new Error("No active event found.");
 
   const topTeams = leaderboard.slice(0, topCount);
-  const topTeamIds = new Set(topTeams.map((t) => t.teamId));
+  const topTeamIds = Array.from(new Set(topTeams.map((t) => t.teamId)));
 
-  return await prisma.$transaction(async (tx) => {
-    // 1. Mark non-qualifiers
-    await tx.team.updateMany({
-      where: {
-        eventId: event.id,
-        id: { notIn: Array.from(topTeamIds) },
-      },
-      data: {
-        qualified: false,
-      },
-    });
-
-    // 2. Qualify top teams and set wallet = Round 1 score
-    for (const t of topTeams) {
-      await tx.team.update({
-        where: { id: t.teamId },
-        data: {
-          qualified: true,
-          wallet: t.score, // Round 2 wallet initialized from Round 1 score!
-        },
-      });
-
-      await tx.scoreEvent.create({
-        data: {
+  return await prisma.$transaction(
+    async (tx) => {
+      // 1. Mark non-qualifiers
+      await tx.team.updateMany({
+        where: {
           eventId: event.id,
-          teamId: t.teamId,
-          type: "QUALIFICATION_CONFIRMED",
-          points: 0,
-          reason: `Qualified Top ${topCount} for Round 2. Wallet initialized to ${t.score} pts.`,
+          id: { notIn: topTeamIds },
+        },
+        data: {
+          qualified: false,
         },
       });
-    }
 
-    // 3. Mark Round 1 as FINISHED and Round 2 as LIVE
-    const r1 = await tx.round.findFirst({ where: { eventId: event.id, number: 1 } });
-    if (r1) {
-      await tx.round.update({
-        where: { id: r1.id },
+      // 2. Qualify top teams for Round 2
+      if (topTeamIds.length > 0) {
+        await tx.team.updateMany({
+          where: { id: { in: topTeamIds } },
+          data: { qualified: true },
+        });
+
+        // Create qualification score events
+        await tx.scoreEvent.createMany({
+          data: topTeamIds.map((id) => ({
+            eventId: event.id,
+            teamId: id,
+            type: "QUALIFICATION_CONFIRMED",
+            points: 0,
+            reason: `Qualified Top ${topCount} for Round 2.`,
+          })),
+        });
+      }
+
+      // 3. Mark Round 1 as FINISHED and Round 2 as LIVE
+      await tx.round.updateMany({
+        where: { eventId: event.id, number: 1 },
         data: { status: "FINISHED", endedAt: new Date() },
       });
-    }
 
-    const r2 = await tx.round.findFirst({ where: { eventId: event.id, number: 2 } });
-    if (r2) {
-      await tx.round.update({
-        where: { id: r2.id },
+      await tx.round.updateMany({
+        where: { eventId: event.id, number: 2 },
         data: { status: "LIVE", startedAt: new Date() },
       });
+
+      await logAuditEvent({
+        eventId: event.id,
+        actor: "ADMIN",
+        action: "QUALIFICATION_CONFIRMED",
+        details: `Admin qualified Top ${topCount} teams: ${topTeams.map((t) => t.teamName).join(", ")}. Round 1 FINISHED, Round 2 LIVE.`,
+      });
+
+      return {
+        qualifiedCount: topTeams.length,
+        qualifiedTeams: topTeams.map((t) => ({ id: t.teamId, name: t.teamName, score: t.score })),
+      };
+    },
+    {
+      timeout: 30000,
+      maxWait: 15000,
     }
-
-    await logAuditEvent({
-      eventId: event.id,
-      actor: "ADMIN",
-      action: "QUALIFICATION_CONFIRMED",
-      details: `Admin qualified Top ${topCount} teams: ${topTeams.map((t) => t.teamName).join(", ")}. Round 1 FINISHED, Round 2 LIVE.`,
-    });
-
-    return {
-      qualifiedCount: topTeams.length,
-      qualifiedTeams: topTeams.map((t) => ({ id: t.teamId, name: t.teamName, wallet: t.score })),
-    };
-  });
+  );
 }
 
 export async function adjustTeamScoreManually({
@@ -89,13 +87,11 @@ export async function adjustTeamScoreManually({
     if (!team) throw new Error("Team not found.");
 
     const newScore = Math.max(0, team.score + points);
-    const newWallet = Math.max(0, team.wallet + points);
 
     const updated = await tx.team.update({
       where: { id: teamId },
       data: {
         score: newScore,
-        wallet: newWallet,
         scoreReachedAt: points > 0 ? now : team.scoreReachedAt,
       },
     });

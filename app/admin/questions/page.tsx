@@ -11,6 +11,7 @@ import {
   AlertCircle,
   X,
   Tag,
+  Lightbulb,
 } from "lucide-react";
 
 export default function AdminQuestionsPage() {
@@ -135,20 +136,20 @@ export default function AdminQuestionsPage() {
       )}
 
       {/* Questions Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-[#090D16] border border-[#1E293B] rounded-2xl overflow-hidden shadow-xl corner-frame">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
-            <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+            <thead className="bg-[#05070B] text-slate-400 uppercase tracking-wider border-b border-[#1E293B]">
               <tr>
-                <th className="py-4 px-6">Challenge Title</th>
+                <th className="py-4 px-6">ID & Challenge Title</th>
                 <th className="py-4 px-6">Category / Diff</th>
                 <th className="py-4 px-6 text-center">Points</th>
-                <th className="py-4 px-6">Release Window</th>
+                <th className="py-4 px-6 text-center">Solves</th>
                 <th className="py-4 px-6">Secret Flag / Answer</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80">
+            <tbody className="divide-y divide-[#1E293B]/70">
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-500">
@@ -162,72 +163,90 @@ export default function AdminQuestionsPage() {
                   </td>
                 </tr>
               ) : (
-                questions.map((q) => (
-                  <tr key={q.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="font-bold text-white text-sm">{q.title}</div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-xs">{q.description}</div>
-                    </td>
+                questions.map((q) => {
+                  const cleanTitle = q.title.replace(/^Q\d+\s*[-—:]\s*/i, "");
+                  const isR2 = q.roundNumber === 2;
 
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded text-[10px]">
-                          {q.category}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            q.difficulty === "EASY"
-                              ? "bg-cyan-500/20 text-cyan-300"
-                              : q.difficulty === "MEDIUM"
-                              ? "bg-amber-500/20 text-amber-300"
-                              : "bg-rose-500/20 text-rose-300"
-                          }`}
-                        >
-                          {q.difficulty}
-                        </span>
-                      </div>
-                    </td>
+                  return (
+                    <tr key={q.id} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-[#05070B] border border-cyan-500/30 text-cyan-300 font-bold text-[10px]">
+                            {isR2 ? "R2" : `Q${q.order.toString().padStart(2, "0")}`}
+                          </span>
+                          <span className="font-bold text-white text-sm uppercase">{cleanTitle}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 truncate max-w-xs mt-0.5">{q.description}</div>
+                      </td>
 
-                    <td className="py-4 px-6 text-center font-bold text-cyan-400">
-                      +{q.points}
-                    </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 bg-[#05070B] text-slate-300 rounded text-[10px] border border-slate-800">
+                            {q.category}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              q.difficulty === "EASY"
+                                ? "bg-cyan-950/40 text-cyan-300 border-cyan-500/40"
+                                : q.difficulty === "MEDIUM"
+                                ? "bg-amber-950/40 text-amber-300 border-amber-500/40"
+                                : "bg-rose-950/40 text-rose-300 border-rose-500/40"
+                            }`}
+                          >
+                            {q.difficulty}
+                          </span>
+                        </div>
+                      </td>
 
-                    <td className="py-4 px-6 text-[11px] text-slate-400">
-                      <div>Rel: {new Date(q.releaseAt).toLocaleTimeString()}</div>
-                      <div>End: {new Date(q.closeAt).toLocaleTimeString()}</div>
-                    </td>
+                      <td className="py-4 px-6 text-center font-black text-cyan-400">
+                        +{q.points}
+                      </td>
 
-                    {/* Secret Flag Reveal for Admin */}
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono bg-slate-950 px-2.5 py-1 rounded border border-slate-700 text-slate-300 text-[11px]">
-                          {revealedAnswers[q.id] ? q.answer : "••••••••••••••••"}
-                        </span>
-                        <button
-                          onClick={() => toggleAnswerReveal(q.id)}
-                          className="text-slate-400 hover:text-white"
-                          title={revealedAnswers[q.id] ? "Hide Answer" : "Reveal Answer"}
-                        >
-                          {revealedAnswers[q.id] ? (
-                            <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
+                      <td className="py-4 px-6 text-center font-bold text-slate-300">
+                        {q.totalSolves || 0}
+                      </td>
 
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => handleDeleteQuestion(q.id, q.title)}
-                        className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                        title="Delete Question"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      {/* Secret Flag Reveal for Admin */}
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono bg-[#05070B] px-2.5 py-1 rounded border border-slate-800 text-slate-300 text-[11px]">
+                            {revealedAnswers[q.id] ? q.answer : "••••••••••••••••"}
+                          </span>
+                          <button
+                            onClick={() => toggleAnswerReveal(q.id)}
+                            className="text-slate-400 hover:text-white"
+                            title={revealedAnswers[q.id] ? "Hide Answer" : "Reveal Answer"}
+                          >
+                            {revealedAnswers[q.id] ? (
+                              <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => window.open(`/admin/questions/${q.id}/hints`, '_blank')}
+                            className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer"
+                            title="Manage Hints"
+                          >
+                            <Lightbulb className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteQuestion(q.id, q.title)}
+                            className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Question"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

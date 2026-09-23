@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { TeamJoinSchema } from "@/lib/validation";
 import { setTeamSessionCookie } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
-import { nanoid } from "nanoid";
+import { getNextCC26Code } from "@/lib/teams";
 
 export async function POST(req: Request) {
   try {
@@ -50,13 +50,14 @@ export async function POST(req: Request) {
         );
       }
 
+      const generatedCode = await getNextCC26Code();
+
       team = await prisma.team.create({
         data: {
           name: cleanTeamName,
-          joinCode: nanoid(8).toUpperCase(),
+          joinCode: generatedCode,
           eventId: activeEvent.id,
           score: 0,
-          wallet: 0, // Default to 0, can be adjusted by admin
           qualified: false,
         },
         include: { event: true },
@@ -152,7 +153,6 @@ export async function POST(req: Request) {
         name: team.name,
         joinCode: team.joinCode,
         score: team.score,
-        wallet: team.wallet,
         qualified: team.qualified,
         memberCount: joinResult.memberList.length,
         maxMembers: 3,

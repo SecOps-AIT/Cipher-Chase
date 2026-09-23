@@ -10,6 +10,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        vault: {
+          black: "#05070B",
+          dark: "#080C14",
+          card: "#0D131F",
+          "card-hover": "#111A2B",
+          border: "#1E293B",
+          "border-light": "#2A3B53",
+          red: "#EF4444",
+          "red-dark": "#7F1D1D",
+          cyan: "#06B6D4",
+          "cyan-dark": "#0E7490",
+          emerald: "#10B981",
+          amber: "#F59E0B",
+        },
         cyber: {
           dark: "#080c14",
           darker: "#04070d",
@@ -35,10 +49,12 @@ const config: Config = {
         ],
       },
       boxShadow: {
-        "cyan-glow": "0 0 20px -5px rgba(0, 240, 255, 0.4)",
-        "neon-glow": "0 0 20px -5px rgba(0, 255, 102, 0.4)",
-        "purple-glow": "0 0 20px -5px rgba(157, 78, 221, 0.4)",
-        "crimson-glow": "0 0 20px -5px rgba(255, 0, 85, 0.4)",
+        "cyan-glow": "0 0 20px -5px rgba(6, 182, 212, 0.4)",
+        "neon-glow": "0 0 20px -5px rgba(16, 185, 129, 0.4)",
+        "crimson-glow": "0 0 20px -5px rgba(239, 68, 68, 0.4)",
+        "gold-glow": "0 0 20px -5px rgba(245, 158, 11, 0.45)",
+        "emerald-glow": "0 0 20px -5px rgba(16, 185, 129, 0.45)",
+        "vault-subtle": "0 4px 20px -2px rgba(0, 0, 0, 0.5)",
       },
     },
   },

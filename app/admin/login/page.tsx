@@ -8,7 +8,7 @@ import { Shield, Lock, Mail, ArrowLeft, ArrowRight, AlertCircle } from "lucide-r
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("admin@cipherchase.local");
-  const [password, setPassword] = useState("cipher-admin-secret-2026");
+  const [password, setPassword] = useState("cipher-2026");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +29,7 @@ export default function AdminLoginPage() {
         throw new Error(data.error || "Authentication failed");
       }
 
-      router.push("/admin");
+      window.location.href = "/admin";
     } catch (err: any) {
       setError(err.message);
     } finally {

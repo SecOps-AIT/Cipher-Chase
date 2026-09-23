@@ -117,3 +117,90 @@ export async function requireTeamSession(): Promise<TeamSessionPayload> {
   }
   return session;
 }
+
+function extractCookie(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// 8. API Route Validators (for NextRequest)
+export async function validateAdminAuth(request: Request): Promise<{
+  success: boolean;
+  error?: string;
+  adminId?: string;
+  session?: AdminSessionPayload;
+}> {
+  try {
+    let token: string | undefined | null = null;
+    try {
+      const cookieStore = cookies();
+      token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+    } catch {
+      // In some route contexts cookies() might throw, fallback to header
+    }
+
+    if (!token) {
+      const cookieHeader = request.headers.get("cookie");
+      token = extractCookie(cookieHeader, ADMIN_COOKIE_NAME);
+    }
+
+    if (!token) {
+      return { success: false, error: "Admin session not found" };
+    }
+
+    const session = await verifyToken<AdminSessionPayload>(token);
+    if (!session || !session.isAdmin) {
+      return { success: false, error: "Invalid admin session" };
+    }
+
+    return { 
+      success: true, 
+      adminId: session.email,
+      session 
+    };
+  } catch (error) {
+    return { success: false, error: "Authentication error" };
+  }
+}
+
+export async function validateTeamAuth(request: Request): Promise<{
+  success: boolean;
+  error?: string;
+  teamId?: string;
+  memberId?: string;
+  session?: TeamSessionPayload;
+}> {
+  try {
+    let token: string | undefined | null = null;
+    try {
+      const cookieStore = cookies();
+      token = cookieStore.get(TEAM_COOKIE_NAME)?.value;
+    } catch {
+      // In some route contexts cookies() might throw, fallback to header
+    }
+
+    if (!token) {
+      const cookieHeader = request.headers.get("cookie");
+      token = extractCookie(cookieHeader, TEAM_COOKIE_NAME);
+    }
+
+    if (!token) {
+      return { success: false, error: "Team session not found" };
+    }
+
+    const session = await verifyToken<TeamSessionPayload>(token);
+    if (!session || !session.teamId) {
+      return { success: false, error: "Invalid team session" };
+    }
+
+    return { 
+      success: true, 
+      teamId: session.teamId,
+      memberId: session.memberId,
+      session 
+    };
+  } catch (error) {
+    return { success: false, error: "Authentication error" };
+  }
+}

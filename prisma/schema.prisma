@@ -21,25 +21,27 @@ model Event {
 }
 
 model Team {
-  id                String                 @id @default(cuid())
-  eventId           String
-  name              String
-  joinCode          String
-  score             Int                    @default(0)
-  scoreReachedAt    DateTime?
-  wallet            Int                    @default(0)
-  qualified         Boolean                @default(false)
-  round1StartedAt   DateTime?
-  round1DeadlineAt  DateTime?
-  round1Duration    Int                    @default(1800)
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  hintClaims        HintClaim[]
-  scoreEvents       ScoreEvent[]
-  submissions       Submission[]
-  event             Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  challengeAttempts TeamChallengeAttempt[]
-  members           TeamMember[]
+  id                       String                     @id @default(cuid())
+  eventId                  String
+  name                     String
+  joinCode                 String
+  score                    Int                        @default(0)
+  scoreReachedAt           DateTime?
+  qualified                Boolean                    @default(false)
+  round1StartedAt          DateTime?
+  round1DeadlineAt         DateTime?
+  round1Duration           Int                        @default(1800)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  hintClaims               HintClaim[]
+  scoreEvents              ScoreEvent[]
+  submissions              Submission[]
+  event                    Event                      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  challengeAttempts        TeamChallengeAttempt[]
+  members                  TeamMember[]
+  auctionBids              AuctionBid[]
+  auctionSales             AuctionSale[]
+  challengeAssignments     TeamChallengeAssignment[]
 
   @@unique([eventId, joinCode])
   @@unique([eventId, name])
@@ -73,6 +75,7 @@ model Round {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   auctionChallenges AuctionChallenge[]
+  auctionQuestions  AuctionQuestion[]
   questions         Question[]
   event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   scoreEvents       ScoreEvent[]
@@ -81,31 +84,44 @@ model Round {
 }
 
 model Question {
-  id              String       @id @default(cuid())
-  roundId         String
-  title           String
-  description     String
-  answer          String
-  points          Int          @default(100)
-  firstBloodBonus Int          @default(50)
-  difficulty      String       @default("MEDIUM")
-  category        String       @default("General")
-  releaseAt       DateTime
-  closeAt         DateTime
-  batchNumber     Int          @default(1)
-  answerMode      String       @default("TRIMMED")
-  isActive        Boolean      @default(true)
-  order           Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  round           Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  submissions     Submission[]
+  id               String            @id @default(cuid())
+  roundId          String
+  title            String
+  description      String
+  answer           String
+  points           Int               @default(100)
+  difficulty       String            @default("MEDIUM")
+  category         String            @default("General")
+  answerMode       String            @default("TRIMMED")
+  isActive         Boolean           @default(true)
+  isCore           Boolean           @default(true)
+  isReleased       Boolean           @default(true)
+  order            Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  round            Round             @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  submissions      Submission[]
+  hints            QuestionHint[]
+  auctionQuestions AuctionQuestion[]
 
-  @@index([roundId, batchNumber, order])
-  @@index([roundId, order])
+  @@index([roundId, isCore, order])
+  @@index([roundId, isReleased])
   @@index([roundId, isActive])
-  @@index([releaseAt])
-  @@index([closeAt])
+  @@index([isCore, isReleased])
+}
+
+model QuestionHint {
+  id         String   @id @default(cuid())
+  questionId String
+  title      String
+  content    String
+  cost       Int      @default(2)
+  order      Int      @default(1)
+  createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  claims     HintClaim[]
+
+  @@index([questionId, order])
 }
 
 model Submission {
@@ -114,7 +130,6 @@ model Submission {
   questionId      String
   submittedAnswer String
   isCorrect       Boolean
-  isFirstBlood    Boolean  @default(false)
   submittedAt     DateTime @default(now())
   submittedBy     String?
   question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
@@ -184,15 +199,18 @@ model Hint {
 }
 
 model HintClaim {
-  id        String   @id @default(cuid())
-  teamId    String
-  hintId    String
-  cost      Int
-  claimedAt DateTime @default(now())
-  hint      Hint     @relation(fields: [hintId], references: [id], onDelete: Cascade)
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  id           String        @id @default(cuid())
+  teamId       String
+  hintId       String?       // For Round 2 auction challenge hints
+  questionHintId String?     // For Round 1 question hints
+  cost         Int
+  claimedAt    DateTime      @default(now())
+  hint         Hint?         @relation(fields: [hintId], references: [id], onDelete: Cascade)
+  questionHint QuestionHint? @relation(fields: [questionHintId], references: [id], onDelete: Cascade)
+  team         Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, hintId])
+  @@unique([teamId, questionHintId])
   @@index([teamId])
 }
 
@@ -226,4 +244,78 @@ model AuditLog {
 
   @@index([eventId, createdAt])
   @@index([actor, action])
+}
+
+model AuctionQuestion {
+  id               String                    @id @default(cuid())
+  roundId          String
+  questionId       String
+  title            String
+  topic            String
+  outline          String
+  baseTimeSeconds  Int
+  basePoints       Int                       @default(200)
+  bonusFormula     String?
+  status           String                    @default("DRAFT")
+  displayedAt      DateTime?
+  auctionClosedAt  DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  round            Round                     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  question         Question                  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  bids             AuctionBid[]
+  sale             AuctionSale?
+  assignments      TeamChallengeAssignment[]
+
+  @@index([roundId, status])
+  @@index([status, displayedAt])
+}
+
+model AuctionBid {
+  id                 String          @id @default(cuid())
+  auctionQuestionId  String
+  teamId             String
+  bidTimeSeconds     Int
+  submittedAt        DateTime        @default(now())
+  auctionQuestion    AuctionQuestion @relation(fields: [auctionQuestionId], references: [id], onDelete: Cascade)
+  team               Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([auctionQuestionId, bidTimeSeconds])
+  @@index([teamId, submittedAt])
+}
+
+model AuctionSale {
+  id                 String          @id @default(cuid())
+  auctionQuestionId  String          @unique
+  teamId             String
+  winningBidSeconds  Int
+  settledByAdminId   String?
+  soldAt             DateTime        @default(now())
+  auctionQuestion    AuctionQuestion @relation(fields: [auctionQuestionId], references: [id], onDelete: Cascade)
+  team               Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, soldAt])
+}
+
+model TeamChallengeAssignment {
+  id                 String          @id @default(cuid())
+  teamId             String
+  auctionQuestionId  String
+  winningBidSeconds  Int
+  status             String          @default("READY")
+  startedAt          DateTime?
+  deadlineAt         DateTime?
+  completedAt        DateTime?
+  failedAt           DateTime?
+  bonusPoints        Int             @default(0)
+  finalScoreChange   Int             @default(0)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  team               Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  auctionQuestion    AuctionQuestion @relation(fields: [auctionQuestionId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, auctionQuestionId])
+  @@index([teamId, status])
+  @@index([status, startedAt])
+  @@index([deadlineAt])
 }

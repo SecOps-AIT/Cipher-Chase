@@ -157,7 +157,7 @@ export default function AdminOverviewPage() {
           </div>
           <h3 className="text-lg font-bold font-mono text-white mb-1">Round 1 Control</h3>
           <p className="text-xs text-slate-400">
-            Start, pause, resume, or finish Round 1. Monitor live submissions and trigger batch releases.
+            Start, pause, resume, or finish Round 1. Monitor live submissions and release backup questions.
           </p>
         </Link>
 

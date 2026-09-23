@@ -7,30 +7,26 @@ export interface QuestionView {
   title: string;
   description: string;
   points: number;
-  firstBloodBonus: number;
   difficulty: string;
   category: string;
-  releaseAt: Date;
-  closeAt: Date;
-  batchNumber: number;
   order: number;
-  globalStatus: "UPCOMING" | "ACTIVE" | "EXPIRED";
+  globalStatus: "CORE_RELEASED" | "BACKUP_LOCKED" | "BACKUP_RELEASED";
   teamStatus: "SOLVED" | "UNSOLVED";
   status: "LOCKED" | "LIVE" | "CLOSED" | "SOLVED";
   solvedAt?: Date | null;
   serverTime: string;
-  firstBlood?: {
-    teamId: string;
-    teamName: string;
-    solvedAt: Date;
-    bonus: number;
-  } | null;
   solvesCount: number;
   recentSolves?: {
     teamId: string;
     teamName: string;
     solvedAt: Date;
-    isFirstBlood: boolean;
+  }[];
+  hints?: {
+    id: string;
+    title: string;
+    cost: number;
+    order: number;
+    claimed: boolean;
   }[];
 }
 
@@ -50,14 +46,10 @@ export interface Round1TeamResponse {
     secondsRemaining: number;
     status: "NOT_STARTED" | "ACTIVE" | "EXPIRED";
   };
-  batchInfo: {
-    currentBatch: number;
-    totalBatches: number;
-    activeQuestionsCount: number;
-    batchCloseAt: Date | null;
-    secondsRemaining: number;
-  };
   questions: QuestionView[];
+  coreCount: number;
+  backupCount: number;
+  releasedBackupCount: number;
   serverTime: string;
 }
 
@@ -108,14 +100,10 @@ export async function getRound1QuestionsForTeam(
         secondsRemaining: 0,
         status: "NOT_STARTED",
       },
-      batchInfo: {
-        currentBatch: 1,
-        totalBatches: 1,
-        activeQuestionsCount: 0,
-        batchCloseAt: null,
-        secondsRemaining: 0,
-      },
       questions: [],
+      coreCount: 0,
+      backupCount: 0,
+      releasedBackupCount: 0,
       serverTime: now.toISOString(),
     };
   }
@@ -123,12 +111,23 @@ export async function getRound1QuestionsForTeam(
   // Get all active questions for Round 1
   const questions = await prisma.question.findMany({
     where: { roundId: round.id, isActive: true },
-    orderBy: [{ batchNumber: "asc" }, { order: "asc" }],
+    orderBy: [{ isCore: "desc" }, { order: "asc" }],
+    include: {
+      hints: {
+        orderBy: { order: "asc" },
+        include: {
+          claims: teamId ? {
+            where: { teamId: teamId },
+            select: { id: true }
+          } : false
+        }
+      }
+    }
   });
 
   const questionIds = questions.map((q) => q.id);
 
-  // Get all global correct solves for these questions (ordered by time)
+  // Get all correct solves for these questions (ordered by time)
   const allSolves = await prisma.submission.findMany({
     where: {
       questionId: { in: questionIds },
@@ -140,9 +139,8 @@ export async function getRound1QuestionsForTeam(
     orderBy: { submittedAt: "asc" },
   });
 
-  // Group global solves by questionId
-  const questionSolvesMap = new Map<string, { teamId: string; teamName: string; solvedAt: Date; isFirstBlood: boolean }[]>();
-  const firstBloodMap = new Map<string, { teamId: string; teamName: string; solvedAt: Date; bonus: number }>();
+  // Group solves by questionId and track team solves
+  const questionSolvesMap = new Map<string, { teamId: string; teamName: string; solvedAt: Date }[]>();
   const solvedQuestionIds = new Set<string>();
   const solvedDateMap = new Map<string, Date>();
 
@@ -154,19 +152,8 @@ export async function getRound1QuestionsForTeam(
         teamId: s.teamId,
         teamName: s.team.name,
         solvedAt: s.submittedAt,
-        isFirstBlood: s.isFirstBlood,
       });
       questionSolvesMap.set(s.questionId, list);
-    }
-
-    if (s.isFirstBlood && !firstBloodMap.has(s.questionId)) {
-      const q = questions.find((qItem) => qItem.id === s.questionId);
-      firstBloodMap.set(s.questionId, {
-        teamId: s.teamId,
-        teamName: s.team.name,
-        solvedAt: s.submittedAt,
-        bonus: q?.firstBloodBonus || 50,
-      });
     }
 
     if (teamId && s.teamId === teamId) {
@@ -175,88 +162,66 @@ export async function getRound1QuestionsForTeam(
     }
   }
 
-  // Calculate batches metadata
-  const batchNumbers = Array.from(new Set(questions.map((q) => q.batchNumber)));
-  const totalBatches = batchNumbers.length > 0 ? Math.max(...batchNumbers) : 1;
-
-  // Find currently active batch
-  const activeQuestions = questions.filter(
-    (q) => now >= q.releaseAt && now < q.closeAt
-  );
-
-  let currentBatch = 1;
-  let batchCloseAt: Date | null = null;
-  let secondsRemaining = 0;
-
-  if (activeQuestions.length > 0) {
-    currentBatch = activeQuestions[0].batchNumber;
-    batchCloseAt = activeQuestions[0].closeAt;
-    secondsRemaining = Math.max(0, Math.ceil((batchCloseAt.getTime() - now.getTime()) / 1000));
-  } else {
-    // If no batch is active, find the next upcoming batch
-    const nextUpcoming = questions.find((q) => now < q.releaseAt);
-    if (nextUpcoming) {
-      currentBatch = nextUpcoming.batchNumber;
-      batchCloseAt = nextUpcoming.closeAt;
-      secondsRemaining = Math.max(0, Math.ceil((nextUpcoming.releaseAt.getTime() - now.getTime()) / 1000));
-    }
-  }
+  // Count questions
+  const coreCount = questions.filter(q => q.isCore).length;
+  const backupCount = questions.filter(q => !q.isCore).length;
+  const releasedBackupCount = questions.filter(q => !q.isCore && q.isReleased).length;
 
   // Map to client-safe question views (answers stripped!)
   const questionViews: QuestionView[] = questions.map((q) => {
-    let globalStatus: "UPCOMING" | "ACTIVE" | "EXPIRED" = "UPCOMING";
-    if (now < q.releaseAt) {
-      globalStatus = "UPCOMING";
-    } else if (now >= q.closeAt) {
-      globalStatus = "EXPIRED";
+    let globalStatus: "CORE_RELEASED" | "BACKUP_LOCKED" | "BACKUP_RELEASED" = "CORE_RELEASED";
+    if (q.isCore) {
+      globalStatus = "CORE_RELEASED";
+    } else if (q.isReleased) {
+      globalStatus = "BACKUP_RELEASED";
     } else {
-      globalStatus = "ACTIVE";
+      globalStatus = "BACKUP_LOCKED";
     }
 
     const isSolved = solvedQuestionIds.has(q.id);
     const teamStatus: "SOLVED" | "UNSOLVED" = isSolved ? "SOLVED" : "UNSOLVED";
 
-    // Apply team timer logic: if team timer expired, questions become CLOSED
+    // Apply team timer logic:
+    // Once team timer has started and not expired, all core questions are LIVE and unlocked without requiring admin approval!
     let status: "LOCKED" | "LIVE" | "CLOSED" | "SOLVED" = "LOCKED";
     if (isSolved) {
       status = "SOLVED";
     } else if (teamTimerExpired) {
       // Team timer expired - all questions freeze
       status = "CLOSED";
-    } else if (globalStatus === "UPCOMING") {
-      status = "LOCKED";
-    } else if (globalStatus === "EXPIRED") {
-      status = "CLOSED";
-    } else if (round.status === "LIVE") {
-      status = "LIVE";
     } else {
-      status = "LOCKED";
+      // Team timer active or ready: ALL questions are unlocked (LIVE) for the team
+      status = "LIVE";
     }
 
     const solvesList = questionSolvesMap.get(q.id) || [];
-    const fb = firstBloodMap.get(q.id) || null;
+
+    // Map hints for this question
+    const questionHints = q.hints?.map(h => ({
+      id: h.id,
+      title: h.title,
+      cost: h.cost,
+      order: h.order,
+      claimed: teamId ? h.claims.length > 0 : false,
+    })) || [];
 
     return {
       id: q.id,
       roundId: q.roundId,
       title: q.title,
-      description: status === "LOCKED" ? "This challenge is currently locked." : q.description,
+      description: q.description,
       points: q.points,
-      firstBloodBonus: q.firstBloodBonus,
       difficulty: q.difficulty,
       category: q.category,
-      releaseAt: q.releaseAt,
-      closeAt: q.closeAt,
-      batchNumber: q.batchNumber,
       order: q.order,
       globalStatus,
       teamStatus,
       status,
       solvedAt: solvedDateMap.get(q.id) || null,
       serverTime: now.toISOString(),
-      firstBlood: fb,
       solvesCount: solvesList.length,
       recentSolves: solvesList,
+      hints: questionHints,
     };
   });
 
@@ -276,14 +241,10 @@ export async function getRound1QuestionsForTeam(
       secondsRemaining: teamTimerSecondsRemaining,
       status: teamTimerStatus,
     },
-    batchInfo: {
-      currentBatch,
-      totalBatches,
-      activeQuestionsCount: activeQuestions.length,
-      batchCloseAt,
-      secondsRemaining,
-    },
     questions: questionViews,
+    coreCount,
+    backupCount,
+    releasedBackupCount,
     serverTime: now.toISOString(),
   };
 }
@@ -301,8 +262,6 @@ export async function submitRound1Answer({
 }): Promise<{
   success: boolean;
   isCorrect?: boolean;
-  isFirstBlood?: boolean;
-  firstBloodBonus?: number;
   points?: number;
   message: string;
   alreadySolved?: boolean;
@@ -347,29 +306,22 @@ export async function submitRound1Answer({
   const round = question.round;
 
   // 1. Authoritative check: Round status
-  if (round.status !== "LIVE") {
+  if (round.status === "PAUSED") {
     return {
       success: false,
-      message: `Round 1 is currently ${round.status.toLowerCase()}. Submissions are paused.`,
+      message: `Round 1 is currently paused. Submissions are temporarily paused.`,
     };
   }
 
-  // 2. Authoritative check: Release window
-  if (now < question.releaseAt) {
+  // 2. Authoritative check: Question availability
+  if (!question.isCore && !question.isReleased) {
     return {
       success: false,
       message: "This challenge has not been released yet.",
     };
   }
 
-  if (now >= question.closeAt) {
-    return {
-      success: false,
-      message: "This challenge has expired. No further submissions accepted.",
-    };
-  }
-
-  // 3. Server-side Rate Limiting: Max 5 submissions per 10 seconds per team per question (Section 14)
+  // 3. Server-side Rate Limiting: Max 5 submissions per 10 seconds per team per question
   const recentAttemptsCount = await prisma.submission.count({
     where: {
       teamId,
@@ -385,7 +337,7 @@ export async function submitRound1Answer({
     };
   }
 
-  // 4. Answer Normalization based on question.answerMode (Section 15)
+  // 4. Answer Normalization based on question.answerMode
   let isMatch = false;
   const mode = question.answerMode || "TRIMMED";
   if (mode === "EXACT") {
@@ -397,7 +349,7 @@ export async function submitRound1Answer({
     isMatch = cleanAnswer === question.answer.trim();
   }
 
-  // 5. Execute in database transaction to eliminate race conditions (Section 13)
+  // 5. Execute in database transaction to eliminate race conditions
   try {
     const outcome = await prisma.$transaction(
       async (tx) => {
@@ -418,17 +370,7 @@ export async function submitRound1Answer({
           };
         }
 
-        // Check if this is the FIRST BLOOD across ALL teams globally
-        const globalFirstSolve = await tx.submission.findFirst({
-          where: {
-            questionId,
-            isCorrect: true,
-          },
-        });
-
-        const isFirstBlood = !globalFirstSolve;
-        const firstBloodBonus = isFirstBlood ? (question.firstBloodBonus || 50) : 0;
-        const totalPointsAwarded = isMatch ? (question.points + firstBloodBonus) : 0;
+        const totalPointsAwarded = isMatch ? question.points : 0;
 
         // Record submission attempt
         await tx.submission.create({
@@ -437,24 +379,21 @@ export async function submitRound1Answer({
             questionId,
             submittedAnswer: cleanAnswer,
             isCorrect: isMatch,
-            isFirstBlood: isMatch ? isFirstBlood : false,
             submittedAt: now,
             submittedBy: memberName,
           },
         });
 
         if (isMatch) {
-          // First correct submission by team: awards points
+          // Award points for correct submission
           await tx.scoreEvent.create({
             data: {
               eventId: team.eventId,
               teamId: team.id,
               roundId: round.id,
-              type: isFirstBlood ? "ROUND1_FIRST_BLOOD" : "ROUND1_CORRECT",
+              type: "ROUND1_CORRECT",
               points: totalPointsAwarded,
-              reason: isFirstBlood
-                ? `First Blood 🩸: ${question.title} (+${question.points} + ${firstBloodBonus} FB bonus)`
-                : `Round 1 solved: ${question.title} (+${question.points} pts)`,
+              reason: `Round 1 solved: ${question.title} (+${question.points} pts)`,
               createdAt: now,
             },
           });
@@ -470,12 +409,8 @@ export async function submitRound1Answer({
           return {
             success: true,
             isCorrect: true,
-            isFirstBlood,
-            firstBloodBonus,
             points: totalPointsAwarded,
-            message: isFirstBlood
-              ? `🩸 FIRST BLOOD! You were the first team to solve ${question.title}! (+${question.points} + ${firstBloodBonus} bonus)`
-              : `Correct flag! (+${question.points} pts awarded to your team)`,
+            message: `Correct flag! (+${question.points} pts awarded to your team)`,
           };
         } else {
           return {
@@ -489,7 +424,7 @@ export async function submitRound1Answer({
       { 
         maxWait: 10000, 
         timeout: 15000,
-        isolationLevel: "Serializable" // Highest isolation level for PostgreSQL
+        isolationLevel: "Serializable"
       }
     );
 
@@ -499,10 +434,8 @@ export async function submitRound1Answer({
         eventId: team.eventId,
         teamId: team.id,
         actor: "TEAM",
-        action: outcome.isFirstBlood ? "FIRST_BLOOD_CLAIMED" : "QUESTION_SOLVED",
-        details: outcome.isFirstBlood
-          ? `🩸 Team ${team.name} (${memberName || "Member"}) scored FIRST BLOOD on ${question.title} (+${outcome.points} pts)`
-          : `Team ${team.name} (${memberName || "Member"}) solved ${question.title} (+${question.points} pts)`,
+        action: "QUESTION_SOLVED",
+        details: `Team ${team.name} (${memberName || "Member"}) solved ${question.title} (+${question.points} pts)`,
       }).catch(console.error);
     } else if (outcome.success && !outcome.isCorrect) {
       logAuditEvent({
@@ -527,10 +460,8 @@ export async function submitRound1Answer({
   }
 }
 
-// Function to fetch detailed question statistics for the admin modal (Section 19)
+// Function to fetch detailed question statistics for the admin modal
 export async function getQuestionDetailForAdmin(questionId: string) {
-  const now = new Date();
-
   const question = await prisma.question.findUnique({
     where: { id: questionId },
     include: {
@@ -544,21 +475,20 @@ export async function getQuestionDetailForAdmin(questionId: string) {
 
   if (!question) return null;
 
-  let globalStatus: "UPCOMING" | "ACTIVE" | "EXPIRED" = "UPCOMING";
-  if (now < question.releaseAt) {
-    globalStatus = "UPCOMING";
-  } else if (now >= question.closeAt) {
-    globalStatus = "EXPIRED";
+  let globalStatus: "CORE_RELEASED" | "BACKUP_LOCKED" | "BACKUP_RELEASED" = "CORE_RELEASED";
+  if (question.isCore) {
+    globalStatus = "CORE_RELEASED";
+  } else if (question.isReleased) {
+    globalStatus = "BACKUP_RELEASED";
   } else {
-    globalStatus = "ACTIVE";
+    globalStatus = "BACKUP_LOCKED";
   }
 
   // Extract successful solves (1 per team)
-  const solves: { teamId: string; teamName: string; solvedAt: Date; solvedBy?: string | null; isFirstBlood: boolean }[] = [];
+  const solves: { teamId: string; teamName: string; solvedAt: Date; solvedBy?: string | null }[] = [];
   const seenTeamSolves = new Set<string>();
 
   const wrongAttemptsMap = new Map<string, { teamName: string; count: number }>();
-  let firstBlood: { teamId: string; teamName: string; solvedAt: Date; bonus: number } | null = null;
 
   for (const s of question.submissions) {
     if (s.isCorrect) {
@@ -569,17 +499,7 @@ export async function getQuestionDetailForAdmin(questionId: string) {
           teamName: s.team.name,
           solvedAt: s.submittedAt,
           solvedBy: s.submittedBy,
-          isFirstBlood: s.isFirstBlood,
         });
-
-        if (s.isFirstBlood && !firstBlood) {
-          firstBlood = {
-            teamId: s.teamId,
-            teamName: s.team.name,
-            solvedAt: s.submittedAt,
-            bonus: question.firstBloodBonus || 50,
-          };
-        }
       }
     } else {
       const current = wrongAttemptsMap.get(s.teamId) || { teamName: s.team.name, count: 0 };
@@ -597,12 +517,10 @@ export async function getQuestionDetailForAdmin(questionId: string) {
     category: question.category,
     difficulty: question.difficulty,
     points: question.points,
-    firstBloodBonus: question.firstBloodBonus,
-    firstBlood,
-    batchNumber: question.batchNumber,
+    order: question.order,
+    isCore: question.isCore,
+    isReleased: question.isReleased,
     answerMode: question.answerMode,
-    releaseAt: question.releaseAt,
-    closeAt: question.closeAt,
     globalStatus,
     isActive: question.isActive,
     solves,
@@ -610,137 +528,548 @@ export async function getQuestionDetailForAdmin(questionId: string) {
   };
 }
 
-// Function to activate/reset batch schedule dynamically
-export async function activateBatchSchedule({
-  batchNumber,
-  durationMinutes = 15,
-  resetAll = false,
-}: {
-  batchNumber?: number;
-  durationMinutes?: number;
-  resetAll?: boolean;
-}) {
-  const round = await prisma.round.findFirst({ where: { number: 1 } });
-  if (!round) throw new Error("Round 1 not found");
-
+// Function to start a team's Round 1 timer
+export async function startTeamRound1Timer(teamId: string): Promise<{
+  success: boolean;
+  message: string;
+  startedAt?: Date | null;
+  deadlineAt?: Date | null;
+  duration?: number;
+}> {
   const now = new Date();
-  const durMs = durationMinutes * 60 * 1000;
+  
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      eventId: true,
+      round1StartedAt: true,
+      round1DeadlineAt: true,
+      round1Duration: true,
+    },
+  });
 
-  if (resetAll) {
-    const questions = await prisma.question.findMany({
-      where: { roundId: round.id },
-      select: { id: true, batchNumber: true },
-    });
+  if (!team) {
+    return { success: false, message: "Team not found." };
+  }
 
-    const batchNumbers = Array.from(new Set(questions.map((q) => q.batchNumber))).sort((a, b) => a - b);
+  // Check if timer already started
+  if (team.round1StartedAt && team.round1DeadlineAt) {
+    return {
+      success: true,
+      message: "Timer already started for this team.",
+      startedAt: team.round1StartedAt,
+      deadlineAt: team.round1DeadlineAt,
+      duration: team.round1Duration,
+    };
+  }
 
-    for (let i = 0; i < batchNumbers.length; i++) {
-      const bNum = batchNumbers[i];
-      const bRelease = new Date(now.getTime() + i * durMs);
-      const bClose = new Date(now.getTime() + (i + 1) * durMs);
+  const duration = team.round1Duration || 1800; // 30 minutes default
+  const startedAt = now;
+  const deadlineAt = new Date(now.getTime() + duration * 1000);
 
-      await prisma.question.updateMany({
-        where: { roundId: round.id, batchNumber: bNum },
+  try {
+    // Use atomic transaction to prevent race conditions
+    const updatedTeam = await prisma.$transaction(async (tx) => {
+      // Double-check within transaction
+      const currentTeam = await tx.team.findUnique({
+        where: { id: teamId },
+        select: { round1StartedAt: true },
+      });
+
+      if (currentTeam?.round1StartedAt) {
+        throw new Error("Timer already started");
+      }
+
+      return await tx.team.update({
+        where: { id: teamId },
         data: {
-          releaseAt: bRelease,
-          closeAt: bClose,
-          isActive: true,
+          round1StartedAt: startedAt,
+          round1DeadlineAt: deadlineAt,
+        },
+        select: {
+          round1StartedAt: true,
+          round1DeadlineAt: true,
+          round1Duration: true,
         },
       });
-    }
-
-    await prisma.round.update({
-      where: { id: round.id },
-      data: { status: "LIVE", startedAt: round.startedAt || now },
     });
 
+    // Log the timer start
     await logAuditEvent({
-      eventId: round.eventId,
-      actor: "ADMIN",
-      action: "BATCHES_RESET_AND_SCHEDULED",
-      details: `Reset and scheduled ${batchNumbers.length} batches starting from now (${durationMinutes} mins each). Batch 1 is now ACTIVE.`,
+      eventId: team.eventId,
+      teamId: team.id,
+      actor: "SYSTEM",
+      action: "ROUND1_TIMER_STARTED",
+      details: `Team ${team.name} Round 1 timer started: ${duration / 60} minutes (${startedAt.toISOString()} → ${deadlineAt.toISOString()})`,
     });
 
     return {
       success: true,
-      message: `Reset and scheduled ${batchNumbers.length} batches (${durationMinutes} mins each). Batch 1 is now ACTIVE!`,
+      message: `Round 1 timer started for ${duration / 60} minutes.`,
+      startedAt: updatedTeam.round1StartedAt,
+      deadlineAt: updatedTeam.round1DeadlineAt,
+      duration: updatedTeam.round1Duration,
+    };
+  } catch (error: any) {
+    if (error.message === "Timer already started") {
+      // Another request beat us to it - fetch current state
+      const currentTeam = await prisma.team.findUnique({
+        where: { id: teamId },
+        select: {
+          round1StartedAt: true,
+          round1DeadlineAt: true,
+          round1Duration: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Timer already started for this team.",
+        startedAt: currentTeam?.round1StartedAt || undefined,
+        deadlineAt: currentTeam?.round1DeadlineAt || undefined,
+        duration: currentTeam?.round1Duration || 1800,
+      };
+    }
+    throw error;
+  }
+}
+
+// Function to release backup questions (Q21-Q30)
+export async function releaseBackupQuestions(questionIds: string[]): Promise<{
+  success: boolean;
+  message: string;
+  releasedCount: number;
+}> {
+  if (!questionIds.length) {
+    return { success: false, message: "No questions selected for release.", releasedCount: 0 };
+  }
+
+  // Verify all questions are backup questions
+  const questions = await prisma.question.findMany({
+    where: {
+      id: { in: questionIds },
+      isCore: false,
+      isReleased: false,
+    },
+    include: { round: true },
+  });
+
+  if (questions.length !== questionIds.length) {
+    return {
+      success: false,
+      message: "Some questions are not valid backup questions or already released.",
+      releasedCount: 0,
     };
   }
 
-  const targetBatch = batchNumber || 1;
-  const bRelease = now;
-  const bClose = new Date(now.getTime() + durMs);
+  const eventId = questions[0]?.round.eventId;
 
-  await prisma.question.updateMany({
-    where: { roundId: round.id, batchNumber: targetBatch },
+  // Release the backup questions
+  const updateResult = await prisma.question.updateMany({
+    where: {
+      id: { in: questionIds },
+    },
     data: {
-      releaseAt: bRelease,
-      closeAt: bClose,
-      isActive: true,
+      isReleased: true,
     },
   });
 
-  await prisma.round.update({
-    where: { id: round.id },
-    data: { status: "LIVE", startedAt: round.startedAt || now },
-  });
-
-  await logAuditEvent({
-    eventId: round.eventId,
-    actor: "ADMIN",
-    action: "BATCH_ACTIVATED",
-    details: `Batch ${targetBatch} activated now for ${durationMinutes} minutes.`,
-  });
+  // Log the release
+  for (const q of questions) {
+    await logAuditEvent({
+      eventId: eventId,
+      actor: "ADMIN",
+      action: "BACKUP_QUESTION_RELEASED",
+      details: `Backup question ${q.title} (${q.order}) released by admin.`,
+    });
+  }
 
   return {
     success: true,
-    message: `Batch ${targetBatch} activated now! Open for ${durationMinutes} minutes.`,
+    message: `Released ${updateResult.count} backup questions.`,
+    releasedCount: updateResult.count,
   };
 }
 
-export async function extendActiveBatch({
-  batchNumber,
-  extraMinutes = 5,
-}: {
-  batchNumber?: number;
-  extraMinutes?: number;
-}) {
-  const round = await prisma.round.findFirst({ where: { number: 1 } });
-  if (!round) throw new Error("Round 1 not found");
-
-  const extraMs = extraMinutes * 60 * 1000;
+// Function to get Round 1 timer statistics for admin
+export async function getRound1TimerStats(): Promise<{
+  totalTeams: number;
+  notStarted: number;
+  active: number;
+  expired: number;
+  avgTimeUsed: number;
+  activeTimers: {
+    teamId: string;
+    teamName: string;
+    startedAt: Date;
+    deadlineAt: Date;
+    secondsRemaining: number;
+    duration: number;
+  }[];
+}> {
   const now = new Date();
 
-  // Find active or target batch
-  let bNum = batchNumber;
-  if (!bNum) {
-    const activeQ = await prisma.question.findFirst({
-      where: { roundId: round.id, releaseAt: { lte: now }, closeAt: { gt: now } },
-    });
-    bNum = activeQ ? activeQ.batchNumber : 1;
-  }
-
-  const questionsInBatch = await prisma.question.findMany({
-    where: { roundId: round.id, batchNumber: bNum },
+  const teams = await prisma.team.findMany({
+    select: {
+      id: true,
+      name: true,
+      round1StartedAt: true,
+      round1DeadlineAt: true,
+      round1Duration: true,
+    },
   });
 
-  for (const q of questionsInBatch) {
-    const newClose = new Date(Math.max(q.closeAt.getTime(), now.getTime()) + extraMs);
-    await prisma.question.update({
-      where: { id: q.id },
-      data: { closeAt: newClose },
-    });
+  let notStarted = 0;
+  let active = 0;
+  let expired = 0;
+  let totalTimeUsed = 0;
+  let timeUsedCount = 0;
+  const activeTimers: {
+    teamId: string;
+    teamName: string;
+    startedAt: Date;
+    deadlineAt: Date;
+    secondsRemaining: number;
+    duration: number;
+  }[] = [];
+
+  for (const team of teams) {
+    if (!team.round1StartedAt || !team.round1DeadlineAt) {
+      notStarted++;
+    } else {
+      const secondsRemaining = Math.max(0, Math.floor((team.round1DeadlineAt.getTime() - now.getTime()) / 1000));
+      
+      if (secondsRemaining > 0) {
+        active++;
+        activeTimers.push({
+          teamId: team.id,
+          teamName: team.name,
+          startedAt: team.round1StartedAt,
+          deadlineAt: team.round1DeadlineAt,
+          secondsRemaining,
+          duration: team.round1Duration,
+        });
+      } else {
+        expired++;
+        // Calculate time used for expired timers
+        const timeUsed = Math.floor((team.round1DeadlineAt.getTime() - team.round1StartedAt.getTime()) / 1000);
+        totalTimeUsed += timeUsed;
+        timeUsedCount++;
+      }
+    }
   }
 
-  await logAuditEvent({
-    eventId: round.eventId,
-    actor: "ADMIN",
-    action: "BATCH_EXTENDED",
-    details: `Extended Batch ${bNum} by +${extraMinutes} minutes.`,
-  });
+  const avgTimeUsed = timeUsedCount > 0 ? Math.floor(totalTimeUsed / timeUsedCount) : 0;
 
   return {
-    success: true,
-    message: `Batch ${bNum} extended by +${extraMinutes} minutes.`,
+    totalTeams: teams.length,
+    notStarted,
+    active,
+    expired,
+    avgTimeUsed,
+    activeTimers: activeTimers.sort((a, b) => a.secondsRemaining - b.secondsRemaining), // Sort by time remaining
   };
+}
+
+// ========================= HINT SYSTEM =========================
+
+export interface QuestionHintView {
+  id: string;
+  title: string;
+  content: string;
+  cost: number;
+  order: number;
+  isClaimed: boolean;
+  claimedAt?: Date;
+}
+
+export interface HintSystemData {
+  questionId: string;
+  questionTitle: string;
+  availableHints: QuestionHintView[];
+  teamScore: number;
+  totalHintsClaimed: number;
+  totalCostPaid: number;
+}
+
+/**
+ * Get hint system data for a specific question for a team
+ */
+export async function getQuestionHintData(questionId: string, teamId: string): Promise<HintSystemData | null> {
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: {
+      hints: {
+        orderBy: { order: 'asc' },
+        include: {
+          claims: {
+            where: { teamId },
+            select: { claimedAt: true }
+          }
+        }
+      }
+    }
+  });
+
+  if (!question) return null;
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { score: true }
+  });
+
+  if (!team) return null;
+
+  const hintsWithClaimStatus = question.hints.map(hint => ({
+    id: hint.id,
+    title: hint.title,
+    content: hint.content,
+    cost: hint.cost,
+    order: hint.order,
+    isClaimed: hint.claims.length > 0,
+    claimedAt: hint.claims[0]?.claimedAt
+  }));
+
+  const claimedHints = hintsWithClaimStatus.filter(h => h.isClaimed);
+
+  return {
+    questionId: question.id,
+    questionTitle: question.title,
+    availableHints: hintsWithClaimStatus,
+    teamScore: team.score,
+    totalHintsClaimed: claimedHints.length,
+    totalCostPaid: claimedHints.reduce((sum, h) => sum + h.cost, 0)
+  };
+}
+
+/**
+ * Claim a hint for a team (with score deduction)
+ */
+export async function claimQuestionHint(hintId: string, teamId: string): Promise<{
+  success: boolean;
+  message: string;
+  hint?: QuestionHintView;
+  remainingScore?: number;
+}> {
+  return await prisma.$transaction(async (tx) => {
+    // Get hint details
+    const hint = await tx.questionHint.findUnique({
+      where: { id: hintId },
+      include: {
+        question: { select: { id: true, title: true } }
+      }
+    });
+
+    if (!hint) {
+      return { success: false, message: "Hint not found" };
+    }
+
+    // Check if hint already claimed by this team
+    const existingClaim = await tx.hintClaim.findUnique({
+      where: { 
+        teamId_questionHintId: { 
+          teamId, 
+          questionHintId: hintId 
+        } 
+      }
+    });
+
+    if (existingClaim) {
+      return { success: false, message: "Hint already claimed by your team" };
+    }
+
+    // Get team score
+    const team = await tx.team.findUnique({
+      where: { id: teamId },
+      select: { score: true, name: true, eventId: true }
+    });
+
+    if (!team) {
+      return { success: false, message: "Team not found" };
+    }
+
+    // Deduct score points (allows negative score as hints cost -2, -3, -5 pts)
+    const updatedTeam = await tx.team.update({
+      where: { id: teamId },
+      data: { score: { decrement: hint.cost } }
+    });
+
+    // Create hint claim
+    await tx.hintClaim.create({
+      data: {
+        teamId,
+        questionHintId: hintId,
+        cost: hint.cost
+      }
+    });
+
+    // Create ScoreEvent to record penalty in audit & leaderboard
+    await tx.scoreEvent.create({
+      data: {
+        eventId: team.eventId,
+        teamId,
+        type: "HINT_PENALTY",
+        points: -hint.cost,
+        reason: `Unlocked hint for "${hint.question.title}" (-${hint.cost} pts)`
+      }
+    });
+
+    // Log the hint claim
+    await logAuditEvent({
+      eventId: team.eventId,
+      teamId,
+      actor: "TEAM",
+      action: "HINT_CLAIMED",
+      details: `Team "${team.name}" claimed hint "${hint.title}" for question "${hint.question.title}" (cost: ${hint.cost} pts)`
+    });
+
+    return {
+      success: true,
+      message: `Hint claimed! ${hint.cost} points deducted from score.`,
+      hint: {
+        id: hint.id,
+        title: hint.title,
+        content: hint.content,
+        cost: hint.cost,
+        order: hint.order,
+        isClaimed: true,
+        claimedAt: new Date()
+      },
+      remainingScore: updatedTeam.score
+    };
+  }, {
+    maxWait: 10000, // 10 seconds
+    timeout: 10000, // 10 seconds
+  });
+}
+
+/**
+ * Create or update hints for a question (Admin function)
+ */
+export async function manageQuestionHints(questionId: string, hints: {
+  id?: string;
+  title: string;
+  content: string;
+  cost: number;
+  order: number;
+}[]): Promise<{ success: boolean; message: string; hints?: QuestionHintView[] }> {
+  try {
+    const question = await prisma.question.findUnique({
+      where: { id: questionId },
+      include: { round: { select: { eventId: true } } }
+    });
+
+    if (!question) {
+      return { success: false, message: "Question not found" };
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Delete existing hints that aren't in the new list
+      const existingHintIds = hints.filter(h => h.id).map(h => h.id!);
+      if (existingHintIds.length > 0) {
+        await tx.questionHint.deleteMany({
+          where: { 
+            questionId,
+            id: { notIn: existingHintIds }
+          }
+        });
+      } else {
+        await tx.questionHint.deleteMany({ where: { questionId } });
+      }
+
+      // Upsert hints
+      const updatedHints = [];
+      for (const hintData of hints) {
+        const hint = await tx.questionHint.upsert({
+          where: { id: hintData.id || "new-hint" },
+          create: {
+            questionId,
+            title: hintData.title,
+            content: hintData.content,
+            cost: hintData.cost,
+            order: hintData.order
+          },
+          update: {
+            title: hintData.title,
+            content: hintData.content,
+            cost: hintData.cost,
+            order: hintData.order
+          }
+        });
+        updatedHints.push({
+          id: hint.id,
+          title: hint.title,
+          content: hint.content,
+          cost: hint.cost,
+          order: hint.order,
+          isClaimed: false
+        });
+      }
+
+      // Log the admin action
+      await logAuditEvent({
+        eventId: question.round.eventId,
+        actor: "ADMIN",
+        action: "QUESTION_HINTS_UPDATED",
+        details: `Updated hints for question "${question.title}" (${hints.length} hints configured)`
+      });
+
+      return updatedHints;
+    }, {
+      maxWait: 10000, // 10 seconds
+      timeout: 10000, // 10 seconds
+    });
+
+    return {
+      success: true,
+      message: `Successfully updated ${hints.length} hints for question`,
+      hints: result
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || "Failed to update question hints"
+    };
+  }
+}
+
+/**
+ * Get all questions with their hint statistics (Admin function)  
+ */
+export async function getQuestionsWithHintStats(roundId: string): Promise<{
+  id: string;
+  title: string;
+  order: number;
+  totalHints: number;
+  totalClaims: number;
+  avgHintCost: number;
+}[]> {
+  const questions = await prisma.question.findMany({
+    where: { roundId },
+    select: {
+      id: true,
+      title: true,
+      order: true,
+      hints: {
+        select: {
+          cost: true,
+          claims: { select: { id: true } }
+        }
+      }
+    },
+    orderBy: { order: 'asc' }
+  });
+
+  return questions.map(q => ({
+    id: q.id,
+    title: q.title,
+    order: q.order,
+    totalHints: q.hints.length,
+    totalClaims: q.hints.reduce((sum, h) => sum + h.claims.length, 0),
+    avgHintCost: q.hints.length > 0 
+      ? Math.round(q.hints.reduce((sum, h) => sum + h.cost, 0) / q.hints.length)
+      : 0
+  }));
 }

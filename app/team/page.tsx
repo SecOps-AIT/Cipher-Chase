@@ -7,7 +7,6 @@ import {
   Shield,
   Trophy,
   Users,
-  Wallet,
   Clock,
   CheckCircle2,
   Lock,
@@ -26,6 +25,7 @@ import { useTeamState } from "@/hooks/useTeamState";
 import { useActiveQuestions } from "@/hooks/useActiveQuestions";
 import { useChallengeTimer } from "@/hooks/useChallengeTimer";
 import { QuestionView } from "@/lib/round1";
+import { CommandHeader } from "@/components/ui/CommandHeader";
 
 export default function TeamDashboardPage() {
   const router = useRouter();
@@ -191,70 +191,18 @@ export default function TeamDashboardPage() {
 
   return (
     <div className="min-h-screen cyber-grid flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold font-mono text-white tracking-wide">{team.name}</h1>
-                <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 text-cyan-400 text-xs font-mono rounded">
-                  {team.joinCode}
-                </span>
-                {team.qualified && (
-                  <span className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-mono rounded flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-purple-400" />
-                    QUALIFIED
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 font-mono">
-                Teammates: {team.members.length > 0 ? team.members.join(", ") : "Solo"}
-              </p>
-            </div>
-          </div>
-
-          {/* Stats Bar */}
-          <div className="flex items-center space-x-4 sm:space-x-6">
-            <div className="text-right">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">SCORE</span>
-              <span className="text-2xl font-black font-mono text-white tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">
-                {team.score}
-              </span>
-            </div>
-
-            <div className="text-right pl-4 border-l border-slate-800">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block flex items-center gap-1 justify-end">
-                <Wallet className="w-3 h-3 text-amber-400" /> WALLET
-              </span>
-              <span className="text-xl font-bold font-mono text-amber-300">
-                {team.wallet} <span className="text-xs text-amber-400/70">pts</span>
-              </span>
-            </div>
-
-            <div className="pl-4 border-l border-slate-800 flex items-center gap-2">
-              <Link
-                href="/leaderboard"
-                target="_blank"
-                className="p-2.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors"
-                title="View Live Leaderboard"
-              >
-                <Trophy className="w-4 h-4 text-amber-400" />
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="p-2.5 bg-slate-900 border border-slate-800 hover:border-rose-900/50 text-slate-400 hover:text-rose-400 rounded-xl transition-colors"
-                title="Leave Team Session"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Operational Tactical Command Bar */}
+      <CommandHeader
+        teamName={team.name}
+        joinCode={team.joinCode}
+        memberName={team.currentMember}
+        memberCount={team.members?.length || 1}
+        maxMembers={3}
+        score={team.score}
+        roundNumber={currentRound?.number || 1}
+        roundTitle={currentRound?.name || "MISSION"}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content Arena */}
       <main className="max-w-7xl mx-auto w-full flex-1 p-6 md:p-8 space-y-8">
@@ -297,7 +245,7 @@ export default function TeamDashboardPage() {
 
             {qLoading ? (
               <div className="py-12 text-center text-slate-500 font-mono text-sm">
-                Fetching challenge batches...
+                Fetching questions...
               </div>
             ) : questionsData?.questions && questionsData.questions.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -399,7 +347,6 @@ export default function TeamDashboardPage() {
         {isRound2 && team.qualified && (
           <section className="space-y-6">
             <Round2TeamPanel
-              teamWallet={team.wallet}
               teamId={team.id}
               onClaimHint={handleClaimHint}
               claimingHintId={claimingHintId}
@@ -518,13 +465,11 @@ export default function TeamDashboardPage() {
 
 // Sub-component for Round 2 Cyber Auction View
 function Round2TeamPanel({
-  teamWallet,
   teamId,
   onClaimHint,
   claimingHintId,
   hintMessage,
 }: {
-  teamWallet: number;
   teamId: string;
   onClaimHint: (hintId: string) => void;
   claimingHintId: string | null;
@@ -559,22 +504,11 @@ function Round2TeamPanel({
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
           <span className="text-xs font-mono text-purple-400 uppercase tracking-widest block">
-            CYBER AUCTION ARENA
+            TIME AUCTION ARENA
           </span>
           <h3 className="text-2xl font-bold font-mono text-white">
             {challenge ? challenge.title : "Awaiting Auction Assignment"}
           </h3>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
-              YOUR WALLET
-            </span>
-            <span className="text-xl font-bold font-mono text-amber-300">
-              {teamWallet} pts
-            </span>
-          </div>
         </div>
       </div>
 
@@ -622,7 +556,7 @@ function Round2TeamPanel({
             {challenge.status === "FAILED" && (
               <div className="p-4 bg-rose-500/10 border border-rose-500/40 rounded-xl text-rose-300 font-mono text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400" />
-                <span>CHALLENGE FAILED. Penalty has been applied to team wallet.</span>
+                <span>CHALLENGE FAILED. Time penalty has been applied to team score.</span>
               </div>
             )}
           </div>
@@ -654,8 +588,8 @@ function Round2TeamPanel({
                       <span className="text-xs font-mono font-bold text-white">
                         {hint.title}
                       </span>
-                      <span className="text-xs font-mono text-amber-400">
-                        {hint.cost} pts
+                      <span className="text-xs font-mono text-rose-400">
+                        -{hint.cost} pts
                       </span>
                     </div>
 
@@ -666,14 +600,12 @@ function Round2TeamPanel({
                     ) : (
                       <button
                         onClick={() => onClaimHint(hint.id)}
-                        disabled={claimingHintId === hint.id || teamWallet < hint.cost}
+                        disabled={claimingHintId === hint.id}
                         className="mt-2 w-full py-1.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 font-mono text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {claimingHintId === hint.id
                           ? "UNLOCKING..."
-                          : teamWallet < hint.cost
-                          ? "INSUFFICIENT WALLET"
-                          : `UNLOCK (-${hint.cost} pts)`}
+                          : `UNLOCK (-${hint.cost} pts from score)`}
                       </button>
                     )}
                   </div>

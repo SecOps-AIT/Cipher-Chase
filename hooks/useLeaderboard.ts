@@ -8,6 +8,14 @@ interface LeaderboardData {
   event: { id: string; name: string; status: string } | null;
   currentRound: { id: string; name: string; number: number; status: string } | null;
   leaderboard: LeaderboardEntry[];
+  roundStats?: {
+    totalQuestions: number;
+    coreQuestions: number;
+    backupQuestions: number;
+    releasedBackupQuestions: number;
+    totalSolves: number;
+    teamsActive: number;
+  };
   serverTime: string;
 }
 

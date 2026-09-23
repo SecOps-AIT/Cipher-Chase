@@ -119,33 +119,33 @@ describe("Cipher Chase Game Engine Logic", () => {
     });
   });
 
-  describe("Round 2 — Wallet & Hint Purchases", () => {
-    it("rejects hint purchase if wallet is insufficient", () => {
-      const wallet = 30;
-      const hintCost = 50;
-
-      const canPurchase = wallet >= hintCost;
-      expect(canPurchase).toBe(false);
+  describe("Round 2 — Time-Based Auction", () => {
+    it("calculates time bonus correctly based on bid time", () => {
+      const baseTime = 300; // 5:00 in seconds
+      const bidTime = 240; // 4:00 in seconds
+      const basePoints = 200;
+      
+      const timeReduction = baseTime - bidTime;
+      const bonusPercentage = (timeReduction / baseTime) * 100;
+      const bonus = Math.floor((bonusPercentage / 100) * basePoints);
+      
+      expect(timeReduction).toBe(60); // 1:00 reduction
+      expect(bonus).toBe(40); // 20% * 200 = 40
     });
 
-    it("deducts hint cost correctly and updates wallet balance", () => {
-      let wallet = 820;
-      const hintCost = 50;
-
-      expect(wallet >= hintCost).toBe(true);
-      wallet -= hintCost;
-      expect(wallet).toBe(770);
+    it("calculates failure penalty as negative bonus", () => {
+      const bonus = 40;
+      const penalty = -bonus;
+      
+      expect(penalty).toBe(-40);
     });
 
-    it("prevents wallet from becoming negative upon failure penalty", () => {
-      let wallet = 60;
-      const penalty = 100;
-
-      const deductible = Math.min(wallet, penalty);
-      wallet -= deductible;
-
-      expect(wallet).toBe(0);
-      expect(wallet).toBeGreaterThanOrEqual(0);
+    it("ensures teams cannot bid above base time", () => {
+      const baseTime = 300;
+      const bidTime = 350;
+      
+      const isValidBid = bidTime <= baseTime;
+      expect(isValidBid).toBe(false);
     });
   });
 

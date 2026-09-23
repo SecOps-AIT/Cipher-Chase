@@ -44,7 +44,7 @@ export default function AdminScoringPage() {
 
     if (
       !confirm(
-        `Are you sure you want to qualify the TOP ${topCount} teams? This will initialize their Round 2 auction wallet equal to their Round 1 score and mark Round 1 as FINISHED.`
+        `Are you sure you want to qualify the TOP ${topCount} teams? This will mark them as qualified for Round 2 Time Auction and mark Round 1 as FINISHED.`
       )
     ) {
       return;
@@ -64,7 +64,7 @@ export default function AdminScoringPage() {
       if (!res.ok) throw new Error(data.error || "Qualification failed");
 
       setSuccessMessage(
-        `Successfully qualified Top ${data.qualifiedCount} teams! Round 2 wallets initialized.`
+        `Successfully qualified Top ${data.qualifiedCount} teams for Round 2 Time Auction!`
       );
       fetchStandings();
     } catch (err: any) {
@@ -81,7 +81,7 @@ export default function AdminScoringPage() {
           <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">
             STAGE PROGRESSION
           </span>
-          <h1 className="text-2xl font-bold font-mono text-white">QUALIFICATION & WALLETS</h1>
+          <h1 className="text-2xl font-bold font-mono text-white">QUALIFICATION</h1>
         </div>
       </div>
 
@@ -103,7 +103,7 @@ export default function AdminScoringPage() {
               ROUND 1 QUALIFICATION SELECTOR
             </h3>
             <p className="text-xs text-slate-400">
-              Select how many top-ranking teams advance to the Round 2 Cyber Auction. Round 1 scores are transferred to Round 2 wallets.
+              Select how many top-ranking teams advance to the Round 2 Time Auction.
             </p>
           </div>
         </div>
@@ -136,7 +136,7 @@ export default function AdminScoringPage() {
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
           <h4 className="text-xs font-mono text-slate-300 uppercase tracking-wider flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-400" /> TOURNAMENT STANDINGS & ROUND 2 WALLET PREVIEW
+            <Trophy className="w-4 h-4 text-amber-400" /> TOURNAMENT STANDINGS
           </h4>
           <span className="text-xs font-mono text-slate-500">
             Top {topCount} will qualify
@@ -151,14 +151,13 @@ export default function AdminScoringPage() {
                 <th className="py-3 px-6">Team Name</th>
                 <th className="py-3 px-6 text-center">R1 Solves</th>
                 <th className="py-3 px-6 text-center">Score</th>
-                <th className="py-3 px-6 text-center">Round 2 Wallet</th>
                 <th className="py-3 px-6 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={5} className="py-12 text-center text-slate-500">
                     Loading standings...
                   </td>
                 </tr>
@@ -186,9 +185,6 @@ export default function AdminScoringPage() {
                       </td>
                       <td className="py-4 px-6 text-center font-bold text-white text-sm">
                         {team.score} pts
-                      </td>
-                      <td className="py-4 px-6 text-center font-bold text-amber-400">
-                        {team.qualified ? team.wallet : team.score} pts
                       </td>
                       <td className="py-4 px-6 text-right">
                         {team.qualified ? (

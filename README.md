@@ -9,14 +9,14 @@ Cipher Chase is a production-grade collegiate cybersecurity Capture the Flag (CT
 * **Authoritative Server Engine**: All timers, scoring calculations, and game logic are strictly computed and verified on the server. The browser is never trusted with game logic.
 * **Per-Team Round 1 Timer**: Each team gets its own 30-minute timer (configurable) that starts when the first member enters Round 1. All team members share the same deadline.
 * **Round 1 — Themed CTF**:
-  * **First Blood Mechanics (🩸)**: The first team globally to solve any challenge earns bonus points
-  * **Dynamic Batch Scheduling**: Admin controls for instant activation and extension of challenge release batches
+  * **Core & Backup Questions**: 20 core questions available immediately, 10 backup questions admin-controlled
+  * **Per-Team Timers**: Each team gets individual 30-minute timer starting when first member enters
   * **Atomic Question Locking**: First correct solve by any team member locks the question for the entire team
   * **Multi-Device Team Concurrency**: Up to 3 members per team with shared real-time state
 * **Round 2 — Cyber Auction**: Admin-controlled auction with synchronized countdown timers, progressive hint unlocks, and speed bonus calculations
 * **Admin Control Panel (`/admin`)**:
   * Live status controls: Start, Pause, Resume, End Round
-  * Real-time batch releases & question vault
+  * Real-time question control & backup question releases
   * Multi-device team registry with readable join codes (e.g., `CC-7X4K9`)
   * Top N qualification selector
   * Full audit log with filtering

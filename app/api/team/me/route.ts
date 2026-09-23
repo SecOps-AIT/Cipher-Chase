@@ -44,7 +44,6 @@ export async function GET() {
         name: team.name,
         joinCode: team.joinCode,
         score: team.score,
-        wallet: team.wallet,
         qualified: team.qualified,
         members: team.members.map((m) => m.name),
         memberCount: team.members.length,
