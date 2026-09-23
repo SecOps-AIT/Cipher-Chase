@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { claimAuctionHint } from "@/lib/round2";
 import { getTeamSession } from "@/lib/auth";

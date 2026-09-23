@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth";
 import { ManualScoreAdjustmentSchema } from "@/lib/validation";

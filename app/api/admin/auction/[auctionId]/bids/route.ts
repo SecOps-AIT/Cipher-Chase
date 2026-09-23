@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getAuctionBids } from "@/lib/round2-auction";
 import { validateAdminAuth } from "@/lib/auth";

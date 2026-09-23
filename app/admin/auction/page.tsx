@@ -162,6 +162,18 @@ export default function AdminLiveAuctionPage() {
     return auctionQuestions.find((q) => q.id === selectedQuestionId) || null;
   }, [auctionQuestions, selectedQuestionId]);
 
+  // When question changes, auto-set default bid time
+  const handleSelectQuestion = (q: AuctionQuestion) => {
+    setSelectedQuestionId(q.id);
+    setSuccessMessage(null);
+    if (q.status !== "SOLD") {
+      // Suggest 80% of base time or base time
+      const suggested = Math.max(30, q.baseTimeSeconds - 30);
+      setBidMinutes(Math.floor(suggested / 60));
+      setBidSeconds(suggested % 60);
+    }
+  };
+
   // Queue Navigators
   const handleShuffleQueue = () => {
     const shuffled = [...auctionQuestions].sort(() => Math.random() - 0.5).map((q) => q.id);
@@ -190,18 +202,6 @@ export default function AdminLiveAuctionPage() {
       }
     }
     handleSelectQuestion(available[0]);
-  };
-
-  // When question changes, auto-set default bid time
-  const handleSelectQuestion = (q: AuctionQuestion) => {
-    setSelectedQuestionId(q.id);
-    setSuccessMessage(null);
-    if (q.status !== "SOLD") {
-      // Suggest 80% of base time or base time
-      const suggested = Math.max(30, q.baseTimeSeconds - 30);
-      setBidMinutes(Math.floor(suggested / 60));
-      setBidSeconds(suggested % 60);
-    }
   };
 
   // Filtered catalogue

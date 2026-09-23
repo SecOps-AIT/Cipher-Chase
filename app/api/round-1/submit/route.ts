@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { SubmitAnswerSchema } from "@/lib/validation";
 import { submitRound1Answer } from "@/lib/round1";

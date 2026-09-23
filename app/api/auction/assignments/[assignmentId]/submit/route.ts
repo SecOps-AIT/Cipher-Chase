@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { submitQuestionAnswer } from "@/lib/round2-timer";
 import { validateTeamAuth } from "@/lib/auth";

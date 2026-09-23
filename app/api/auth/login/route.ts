@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { AdminLoginSchema } from "@/lib/validation";
 import { setAdminSessionCookie } from "@/lib/auth";
