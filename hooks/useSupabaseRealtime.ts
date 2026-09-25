@@ -31,8 +31,16 @@ interface SupabaseRealtimeOptions {
  * });
  * ```
  */
+let channelSeq = 0;
+
 export function useSupabaseRealtime(options: SupabaseRealtimeOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // Each hook instance needs its own channel — reusing a name across
+  // instances (e.g. multiple components subscribing to the same table)
+  // makes the Supabase client return an already-subscribed channel, and
+  // calling .on()/.subscribe() on it again throws "cannot add
+  // postgres_changes callbacks after subscribe()".
+  const instanceIdRef = useRef(++channelSeq);
 
   useEffect(() => {
     // Skip if Supabase is not configured
@@ -42,8 +50,8 @@ export function useSupabaseRealtime(options: SupabaseRealtimeOptions) {
 
     const { table, event = "*", filter, onInsert, onUpdate, onDelete, onChange } = options;
 
-    // Create a unique channel name
-    const channelName = `realtime:${table}${filter ? `:${filter}` : ""}`;
+    // Create a unique channel name per hook instance
+    const channelName = `realtime:${table}${filter ? `:${filter}` : ""}:${instanceIdRef.current}`;
 
     // Subscribe to changes
     const channel = supabase
