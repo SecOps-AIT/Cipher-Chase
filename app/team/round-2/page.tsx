@@ -26,6 +26,8 @@ import {
   Play,
   Square,
   Lightbulb,
+  Paperclip,
+  Download,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useTeamState } from "@/hooks/useTeamState";
@@ -117,6 +119,28 @@ export default function TeamRound2Page() {
   // Hint state
   const [claimingHintId, setClaimingHintId] = useState<string | null>(null);
   const [hintFeedback, setHintFeedback] = useState<string | null>(null);
+
+  // Attachment state
+  const [attachments, setAttachments] = useState<{
+    id: string;
+    originalName: string;
+    fileSize: number;
+    storageUrl: string;
+  }[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedAssignment) {
+      setAttachments([]);
+      return;
+    }
+    setAttachmentsLoading(true);
+    fetch(`/api/round-2/attachments?assignmentId=${selectedAssignment.id}`)
+      .then((res) => res.json())
+      .then((data) => setAttachments(data.attachments || []))
+      .catch(() => setAttachments([]))
+      .finally(() => setAttachmentsLoading(false));
+  }, [selectedAssignment]);
 
   // Load auction data for team
   useEffect(() => {
@@ -958,6 +982,38 @@ export default function TeamRound2Page() {
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl mb-6 text-sm text-slate-300 leading-relaxed font-sans whitespace-pre-wrap">
               {selectedAssignment.question.description}
             </div>
+
+            {/* Resource Attachments */}
+            {(attachmentsLoading || attachments.length > 0) && (
+              <div className="mb-6">
+                <h4 className="text-xs font-mono text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Paperclip className="w-4 h-4" /> RESOURCES
+                </h4>
+                {attachmentsLoading ? (
+                  <p className="text-xs font-mono text-slate-500">Loading resources...</p>
+                ) : (
+                  <div className="space-y-2">
+                    {attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={att.storageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-800 hover:border-cyan-500/50 rounded-lg transition-colors"
+                      >
+                        <Download className="w-4 h-4 text-cyan-400 shrink-0" />
+                        <span className="text-sm font-mono text-white truncate flex-1">
+                          {att.originalName}
+                        </span>
+                        <span className="text-xs font-mono text-slate-500 shrink-0">
+                          {(att.fileSize / 1024).toFixed(0)} KB
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Hints Section */}
             {selectedAssignment.question.hints && selectedAssignment.question.hints.length > 0 && (

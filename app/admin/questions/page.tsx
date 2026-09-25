@@ -620,6 +620,7 @@ function Round2Section() {
   const [points, setPoints] = useState(200);
   const [hintPenalty, setHintPenalty] = useState(-10);
   const [failurePenalty, setFailurePenalty] = useState(0);
+  const [createAttachmentFiles, setCreateAttachmentFiles] = useState<File[]>([]);
 
   useEffect(() => {
     fetchQuestions();
@@ -658,6 +659,7 @@ function Round2Section() {
     setPoints(200);
     setHintPenalty(-10);
     setFailurePenalty(0);
+    setCreateAttachmentFiles([]);
   };
 
   const handleCreateQuestion = async (e: React.FormEvent) => {
@@ -686,6 +688,33 @@ function Round2Section() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create auction question");
+
+      const questionId = data.auctionQuestion.questionId;
+
+      for (const file of createAttachmentFiles) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", file);
+        const uploadRes = await fetch("/api/admin/questions/upload", { method: "POST", body: uploadForm });
+        const uploaded = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploaded.error || `Could not upload ${file.name}`);
+
+        const attachRes = await fetch("/api/admin/round-2/attachments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionId,
+            filename: uploaded.name,
+            originalName: file.name,
+            mimeType: file.type,
+            fileSize: file.size,
+            storageUrl: uploaded.url,
+          }),
+        });
+        if (!attachRes.ok) {
+          const attachErr = await attachRes.json();
+          throw new Error(attachErr.error || `Could not attach ${file.name}`);
+        }
+      }
 
       setMessage({ type: 'success', text: `Auction question "${title}" created` });
       setShowModal(false);
@@ -1091,6 +1120,22 @@ function Round2Section() {
                   rows={3}
                   className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Resource Files (image, pcap, zip, etc.)
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setCreateAttachmentFiles(Array.from(e.target.files || []))}
+                  className="w-full text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/15 file:px-3 file:py-2 file:text-cyan-300"
+                  accept=".pdf,.zip,.pcap,.pcapng,.txt,.md,.json,.xml,.csv,.log,.png,.jpg,.jpeg,.gif,.bmp,.webp"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Given to the team once this question is assigned to them (25 MB per file).
+                </p>
               </div>
 
               <div>
