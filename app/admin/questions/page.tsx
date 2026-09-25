@@ -12,6 +12,7 @@ import {
   X,
   Tag,
   Lightbulb,
+  Edit,
 } from "lucide-react";
 
 export default function AdminQuestionsPage() {
@@ -24,12 +25,16 @@ export default function AdminQuestionsPage() {
 
   // New question modal state
   const [showModal, setShowModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [answer, setAnswer] = useState("");
   const [points, setPoints] = useState(100);
   const [difficulty, setDifficulty] = useState("MEDIUM");
   const [category, setCategory] = useState("Web Security");
+  const [topic, setTopic] = useState("");
+  const [outline, setOutline] = useState("");
+  const [hintPenalty, setHintPenalty] = useState(10);
   const [releaseMinutesFromNow, setReleaseMinutesFromNow] = useState(0);
   const [durationMinutes, setDurationMinutes] = useState(20);
   const [createLoading, setCreateLoading] = useState(false);
@@ -73,38 +78,78 @@ export default function AdminQuestionsPage() {
         attachmentUrls.push(uploaded.url);
       }
 
-      const res = await fetch("/api/admin/questions", {
-        method: "POST",
+      const payload = {
+        title,
+        description: attachmentUrls.length
+          ? `${description}\n\nAttachments:\n${attachmentUrls.join("\n")}`
+          : description,
+        answer,
+        points,
+        difficulty,
+        category,
+        topic: topic.trim() || null,
+        outline: outline.trim() || null,
+        hintPenalty,
+        releaseAt: releaseAt.toISOString(),
+        closeAt: closeAt.toISOString(),
+        order: questions.length + 1,
+      };
+
+      const url = editingQuestion 
+        ? `/api/admin/questions/${editingQuestion.id}`
+        : "/api/admin/questions";
+      
+      const method = editingQuestion ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description: attachmentUrls.length
-            ? `${description}\n\nAttachments:\n${attachmentUrls.join("\n")}`
-            : description,
-          answer,
-          points,
-          difficulty,
-          category,
-          releaseAt: releaseAt.toISOString(),
-          closeAt: closeAt.toISOString(),
-          order: questions.length + 1,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create question");
+      if (!res.ok) throw new Error(data.error || `Failed to ${editingQuestion ? 'update' : 'create'} question`);
 
       setShowModal(false);
-      setTitle("");
-      setDescription("");
-      setAttachmentFiles([]);
-      setAnswer("");
+      resetForm();
       fetchQuestions();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setCreateLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setEditingQuestion(null);
+    setTitle("");
+    setDescription("");
+    setAttachmentFiles([]);
+    setAnswer("");
+    setPoints(100);
+    setDifficulty("MEDIUM");
+    setCategory("Web Security");
+    setTopic("");
+    setOutline("");
+    setHintPenalty(10);
+    setReleaseMinutesFromNow(0);
+    setDurationMinutes(20);
+  };
+
+  const handleEditQuestion = (q: any) => {
+    setEditingQuestion(q);
+    setTitle(q.title);
+    setDescription(q.description);
+    setAnswer(q.answer);
+    setPoints(q.points);
+    setDifficulty(q.difficulty);
+    setCategory(q.category);
+    setTopic(q.topic || "");
+    setOutline(q.outline || "");
+    setHintPenalty(q.hintPenalty || 10);
+    setReleaseMinutesFromNow(0);
+    setDurationMinutes(20);
+    setShowModal(true);
   };
 
   const handleDeleteQuestion = async (id: string, qTitle: string) => {
@@ -243,6 +288,13 @@ export default function AdminQuestionsPage() {
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            onClick={() => handleEditQuestion(q)}
+                            className="p-2 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Question"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => window.open(`/admin/questions/${q.id}/hints`, '_blank')}
                             className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer"
                             title="Manage Hints"
@@ -267,12 +319,12 @@ export default function AdminQuestionsPage() {
         </div>
       </div>
 
-      {/* CREATE QUESTION MODAL */}
+      {/* CREATE/EDIT QUESTION MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative my-8">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8">
             <button
-              onClick={() => setShowModal(false)}
+              onClick={() => { setShowModal(false); resetForm(); }}
               className="absolute top-5 right-5 text-slate-400 hover:text-white"
             >
               <X className="w-5 h-5" />
@@ -283,8 +335,12 @@ export default function AdminQuestionsPage() {
                 <FileQuestion className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold font-mono text-white">ADD CTF CHALLENGE</h3>
-                <p className="text-xs text-slate-400">Create a question with automated release windows</p>
+                <h3 className="text-lg font-bold font-mono text-white">
+                  {editingQuestion ? "EDIT QUESTION" : "ADD CTF CHALLENGE"}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {editingQuestion ? "Update question details" : "Create a question with automated release windows"}
+                </p>
               </div>
             </div>
 
@@ -305,6 +361,32 @@ export default function AdminQuestionsPage() {
 
               <div>
                 <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Topic (Round 1)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. OSINT, Web Exploitation"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Outline (Round 1)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Searching for clues on platforms"
+                  value={outline}
+                  onChange={(e) => setOutline(e.target.value)}
+                  className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
                   Description / Prompt <span className="text-cyan-400">*</span>
                 </label>
                 <textarea
@@ -317,11 +399,13 @@ export default function AdminQuestionsPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">Question Attachments</label>
-                <input type="file" multiple onChange={(e) => setAttachmentFiles(Array.from(e.target.files || []))} className="w-full text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/15 file:px-3 file:py-2 file:text-cyan-300" />
-                <p className="mt-1 text-[11px] text-slate-500">Files are uploaded to the configured Supabase Storage bucket (25 MB per file).</p>
-              </div>
+              {!editingQuestion && (
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">Question Attachments</label>
+                  <input type="file" multiple onChange={(e) => setAttachmentFiles(Array.from(e.target.files || []))} className="w-full text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/15 file:px-3 file:py-2 file:text-cyan-300" />
+                  <p className="mt-1 text-[11px] text-slate-500">Files are uploaded to the configured Supabase Storage bucket (25 MB per file).</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
@@ -337,7 +421,7 @@ export default function AdminQuestionsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
                     Points
@@ -346,6 +430,18 @@ export default function AdminQuestionsPage() {
                     type="number"
                     value={points}
                     onChange={(e) => setPoints(parseInt(e.target.value, 10))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Hint Penalty
+                  </label>
+                  <input
+                    type="number"
+                    value={hintPenalty}
+                    onChange={(e) => setHintPenalty(parseInt(e.target.value, 10))}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
                   />
                 </div>
@@ -378,36 +474,38 @@ export default function AdminQuestionsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div>
-                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
-                    Release In (Minutes from now)
-                  </label>
-                  <input
-                    type="number"
-                    value={releaseMinutesFromNow}
-                    onChange={(e) => setReleaseMinutesFromNow(parseInt(e.target.value, 10))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
-                  />
-                </div>
+              {!editingQuestion && (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                      Release In (Minutes from now)
+                    </label>
+                    <input
+                      type="number"
+                      value={releaseMinutesFromNow}
+                      onChange={(e) => setReleaseMinutesFromNow(parseInt(e.target.value, 10))}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
-                    Active Duration (Minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={durationMinutes}
-                    onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
-                  />
+                  <div>
+                    <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                      Active Duration (Minutes)
+                    </label>
+                    <input
+                      type="number"
+                      value={durationMinutes}
+                      onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10))}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); resetForm(); }}
                   className="px-4 py-2 text-xs font-mono text-slate-400 hover:text-white"
                 >
                   Cancel
@@ -417,7 +515,7 @@ export default function AdminQuestionsPage() {
                   disabled={createLoading || !title.trim() || !answer.trim()}
                   className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs rounded-xl transition-colors disabled:opacity-50"
                 >
-                  {createLoading ? "Creating..." : "Save Question"}
+                  {createLoading ? (editingQuestion ? "Updating..." : "Creating...") : (editingQuestion ? "Update Question" : "Save Question")}
                 </button>
               </div>
             </form>

@@ -23,6 +23,61 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const session = await requireAdminSession();
+    const body = await req.json();
+
+    const question = await prisma.question.findUnique({
+      where: { id: params.id },
+      include: { round: true },
+    });
+    if (!question) {
+      return NextResponse.json({ error: "Question not found" }, { status: 404 });
+    }
+
+    const updateData: any = {};
+    if (body.title !== undefined) updateData.title = body.title.trim();
+    if (body.description !== undefined) updateData.description = body.description.trim();
+    if (body.answer !== undefined) updateData.answer = body.answer.trim();
+    if (body.points !== undefined) updateData.points = Number(body.points);
+    if (body.difficulty !== undefined) updateData.difficulty = body.difficulty;
+    if (body.category !== undefined) updateData.category = body.category.trim();
+    if (body.topic !== undefined) updateData.topic = body.topic.trim() || null;
+    if (body.outline !== undefined) updateData.outline = body.outline.trim() || null;
+    if (body.hintPenalty !== undefined) updateData.hintPenalty = Number(body.hintPenalty);
+    if (body.releaseAt !== undefined) updateData.releaseAt = new Date(body.releaseAt);
+    if (body.closeAt !== undefined) updateData.closeAt = new Date(body.closeAt);
+
+    const updated = await prisma.question.update({
+      where: { id: params.id },
+      data: updateData,
+    });
+
+    await logAuditEvent({
+      eventId: question.round.eventId,
+      actor: "ADMIN",
+      action: "QUESTION_UPDATED",
+      details: `Question "${question.title}" was fully updated by admin.`,
+    });
+
+    await logActivity({
+      action: ActivityActions.QUESTION_UPDATED,
+      performedBy: session.email,
+      questionId: params.id,
+      details: `Updated question "${question.title}"`,
+      metadata: { updatedFields: Object.keys(updateData) }
+    });
+
+    return NextResponse.json({ success: true, question: updated });
+  } catch (err: any) {
+    if (err.message === "UNAUTHORIZED_ADMIN") {
+      return NextResponse.json({ error: "Unauthorized: Admin access required" }, { status: 403 });
+    }
+    return NextResponse.json({ error: err.message || "Failed to update question" }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await requireAdminSession();

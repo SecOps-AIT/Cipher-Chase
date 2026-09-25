@@ -103,6 +103,7 @@ model Question {
   points               Int                   @default(100)
   difficulty           String                @default("MEDIUM")
   category             String                @default("General")
+  topic                String?
   answerMode           String                @default("TRIMMED")
   
   // External CTF integration

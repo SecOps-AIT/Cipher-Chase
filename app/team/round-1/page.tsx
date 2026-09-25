@@ -404,6 +404,29 @@ export default function TeamRound1Page() {
 
               {/* Game State Explanation */}
               <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-4 space-y-3">
+                {/* CTF CHALLENGE LINK - PROMINENT */}
+                <div className="mb-4 p-4 bg-gradient-to-r from-cyan-500/20 via-emerald-500/20 to-purple-500/20 border-2 border-cyan-500/50 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Terminal className="w-5 h-5 text-cyan-400" />
+                    <span className="text-sm font-bold text-white uppercase tracking-wider">CTF Challenge Platform</span>
+                  </div>
+                  <p className="text-xs text-slate-300 mb-3">
+                    Access the live challenges, solve puzzles, and submit flags at the official CTF platform:
+                  </p>
+                  <a
+                    href="https://heist-ctf.vercel.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold font-mono text-sm rounded-lg transition-all shadow-lg hover:shadow-cyan-500/30"
+                  >
+                    <Zap className="w-4 h-4" />
+                    OPEN CTF PLATFORM →
+                  </a>
+                  <p className="text-xs text-slate-400 mt-2">
+                    🔗 <span className="font-mono">heist-ctf.vercel.app</span>
+                  </p>
+                </div>
+
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0" />
                   <span className="text-sm font-semibold text-white">How This Round Works</span>
