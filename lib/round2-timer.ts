@@ -199,12 +199,13 @@ export async function processExpiredTimers(): Promise<{
     },
     include: {
       team: { select: { name: true } },
-      auctionQuestion: { 
-        select: { 
+      auctionQuestion: {
+        select: {
           title: true,
           points: true, // Admin-set points
+          failurePenalty: true, // Admin-set penalty applied on timeout
           round: { select: { eventId: true, id: true } }
-        } 
+        }
       }
     }
   });
@@ -214,28 +215,35 @@ export async function processExpiredTimers(): Promise<{
   for (const assignment of expiredAssignments) {
     try {
       await prisma.$transaction(async (tx) => {
-        // Mark as failed - NO PENALTY APPLIED TO SCORE
-        // In new rules, admin just doesn't award points if failed
+        // Penalty is negative or zero, set per-question by the admin
+        const penalty = -Math.abs(assignment.auctionQuestion.failurePenalty || 0);
+
         await tx.teamChallengeAssignment.update({
           where: { id: assignment.id },
           data: {
             status: "FAILED",
             failedAt: now,
-            finalScoreChange: 0 // No score change for failure
+            finalScoreChange: penalty
           }
         });
 
-        // NO SCORE PENALTY - Team simply doesn't get the points
+        if (penalty !== 0) {
+          await tx.team.update({
+            where: { id: assignment.teamId },
+            data: { score: { increment: penalty } }
+          });
+        }
 
-        // Create score event for tracking (0 points)
         await tx.scoreEvent.create({
           data: {
             eventId: assignment.auctionQuestion.round.eventId,
             teamId: assignment.teamId,
             roundId: assignment.auctionQuestion.round.id,
             type: "ROUND_2_TIMEOUT",
-            points: 0,
-            reason: `Time expired for "${assignment.auctionQuestion.title}" (no points awarded)`
+            points: penalty,
+            reason: penalty !== 0
+              ? `Time expired for "${assignment.auctionQuestion.title}" (${penalty} pts penalty)`
+              : `Time expired for "${assignment.auctionQuestion.title}" (no points awarded)`
           }
         });
 
@@ -245,7 +253,7 @@ export async function processExpiredTimers(): Promise<{
           teamId: assignment.teamId,
           actor: "SYSTEM",
           action: "QUESTION_TIMEOUT",
-          details: `Team "${assignment.team.name}" timed out on "${assignment.auctionQuestion.title}" (no points awarded)`
+          details: `Team "${assignment.team.name}" timed out on "${assignment.auctionQuestion.title}" (${penalty} pts)`
         });
       }, { timeout: 20000, maxWait: 10000 });
 

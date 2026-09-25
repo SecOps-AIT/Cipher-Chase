@@ -319,6 +319,7 @@ model AuctionQuestion {
   baseTimeSeconds  Int                       // Time for auction bidding display only, no scoring impact
   points           Int                       @default(200) // Admin-set points (NO TIME BONUS)
   hintPenalty      Int                       @default(-10) // Admin-set penalty per hint in Round 2 (e.g., -10, -15, -20)
+  failurePenalty   Int                       @default(0) // Admin-set penalty applied if the team's timer expires without a correct solve
   hasAttachments   Boolean                   @default(false)
   status           String                    @default("DRAFT")
   displayedAt      DateTime?

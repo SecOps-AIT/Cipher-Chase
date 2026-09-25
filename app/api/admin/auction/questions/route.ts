@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       baseTimeSeconds,
       points,
       hintPenalty,
+      failurePenalty,
     } = body;
 
     if (
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
           baseTimeSeconds,
           points,
           hintPenalty: hintPenalty ?? -10,
+          failurePenalty: failurePenalty ?? 0,
           status: "DRAFT",
         },
       });
@@ -103,6 +105,7 @@ export async function POST(request: NextRequest) {
         baseTimeSeconds: auctionQuestion.baseTimeSeconds,
         points: auctionQuestion.points,
         hintPenalty: auctionQuestion.hintPenalty,
+        failurePenalty: auctionQuestion.failurePenalty,
         status: auctionQuestion.status,
         answer: question.answer,
         difficulty: question.difficulty,
@@ -154,6 +157,7 @@ export async function GET(request: NextRequest) {
         baseTimeSeconds: true,
         points: true,
         hintPenalty: true,
+        failurePenalty: true,
         status: true,
         displayedAt: true,
         auctionClosedAt: true,
@@ -182,6 +186,7 @@ export async function GET(request: NextRequest) {
       baseTimeSeconds: aq.baseTimeSeconds,
       points: aq.points, // Admin-set points
       hintPenalty: aq.hintPenalty, // Admin-set hint penalty
+      failurePenalty: aq.failurePenalty, // Admin-set penalty on timeout
       status: aq.status,
       displayedAt: aq.displayedAt?.toISOString() || null,
       auctionClosedAt: aq.auctionClosedAt?.toISOString() || null,

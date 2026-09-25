@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { getTeamActiveAssignments } from "@/lib/round2-auction";
+import { processExpiredTimers } from "@/lib/round2-timer";
 
 export async function getRound2StateForTeam(teamId?: string) {
   if (!teamId) {
     return { assignments: [], challenges: [] };
   }
+  // No cron is configured to sweep expired Round 2 timers, so piggyback the
+  // sweep on team polling — cheap, indexed query, and keeps FAILED status
+  // (and any failure penalty) applied close to when the deadline actually passes.
+  await processExpiredTimers();
   const assignments = await getTeamActiveAssignments(teamId);
   return { assignments };
 }

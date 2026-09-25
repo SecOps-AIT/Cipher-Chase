@@ -41,6 +41,7 @@ interface AuctionQuestion {
   baseTimeSeconds: number;
   points: number;
   hintPenalty: number;
+  failurePenalty: number;
   status: string;
   answer?: string;
   difficulty?: string;
@@ -618,6 +619,7 @@ function Round2Section() {
   const [baseTimeSeconds, setBaseTimeSeconds] = useState(300);
   const [points, setPoints] = useState(200);
   const [hintPenalty, setHintPenalty] = useState(-10);
+  const [failurePenalty, setFailurePenalty] = useState(0);
 
   useEffect(() => {
     fetchQuestions();
@@ -655,6 +657,7 @@ function Round2Section() {
     setBaseTimeSeconds(300);
     setPoints(200);
     setHintPenalty(-10);
+    setFailurePenalty(0);
   };
 
   const handleCreateQuestion = async (e: React.FormEvent) => {
@@ -677,6 +680,7 @@ function Round2Section() {
           baseTimeSeconds,
           points,
           hintPenalty,
+          failurePenalty,
         }),
       });
 
@@ -887,7 +891,10 @@ function Round2Section() {
                       </button>
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
-                      <span>{q.points} pts</span>
+                      <span>+{q.points} pts</span>
+                      {q.failurePenalty > 0 && (
+                        <span className="text-rose-400">/ -{q.failurePenalty}</span>
+                      )}
                       <span>•</span>
                       <span>{q.topic}</span>
                       <span>•</span>
@@ -1100,7 +1107,7 @@ function Round2Section() {
                 />
               </div>
 
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
                     Points
@@ -1125,6 +1132,22 @@ function Round2Section() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Timeout Penalty
+                  </label>
+                  <input
+                    type="number"
+                    value={failurePenalty}
+                    onChange={(e) => setFailurePenalty(parseInt(e.target.value, 10) || 0)}
+                    placeholder="e.g. 50"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">Deducted if the team's timer runs out unsolved.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
                     Difficulty
