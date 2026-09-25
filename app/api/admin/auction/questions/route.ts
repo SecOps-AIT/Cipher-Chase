@@ -94,7 +94,19 @@ export async function GET(request: NextRequest) {
     
     const auctionQuestions = await prisma.auctionQuestion.findMany({
       where: { roundId },
-      include: {
+      select: {
+        id: true,
+        questionId: true,
+        title: true,
+        topic: true,
+        outline: true,
+        baseTimeSeconds: true,
+        points: true,
+        hintPenalty: true,
+        status: true,
+        displayedAt: true,
+        auctionClosedAt: true,
+        createdAt: true,
         bids: {
           include: {
             team: { select: { name: true } }
