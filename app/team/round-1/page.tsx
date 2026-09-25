@@ -23,6 +23,7 @@ import {
   HelpCircle,
   Terminal,
   Check,
+  Flag,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useTeamState } from "@/hooks/useTeamState";
@@ -43,6 +44,8 @@ export default function TeamRound1Page() {
   const [demoFlagSolved, setDemoFlagSolved] = useState(false);
   const [demoFeedback, setDemoFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [startLoading, setStartLoading] = useState(false);
+  const [endLoading, setEndLoading] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Automatically show tutorial when entering Round 1 if timer is not started
   useEffect(() => {
@@ -208,6 +211,25 @@ export default function TeamRound1Page() {
       alert(err.message || "Failed to start operation timer");
     } finally {
       setStartLoading(false);
+    }
+  };
+
+  const handleEndOperation = async () => {
+    setEndLoading(true);
+    try {
+      const res = await fetch("/api/round-1/end", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setShowEndConfirm(false);
+        refreshQuestions();
+        refreshTeam();
+      } else {
+        alert(data.error || "Failed to end operation");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to end operation");
+    } finally {
+      setEndLoading(false);
     }
   };
 
@@ -515,8 +537,17 @@ export default function TeamRound1Page() {
                 )}
                 
                 {questionsData?.teamTimer?.status === "ACTIVE" && (
-                  <div className="text-[10px] text-emerald-400 mt-2 font-medium">
-                    Competition Active
+                  <div className="mt-3 space-y-1.5">
+                    <div className="text-[10px] text-emerald-400 font-medium">
+                      Competition Active
+                    </div>
+                    <button
+                      onClick={() => setShowEndConfirm(true)}
+                      className="w-full py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 font-bold font-mono text-[11px] rounded-lg transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Flag className="w-3.5 h-3.5" />
+                      END TEST
+                    </button>
                   </div>
                 )}
                 
@@ -1134,6 +1165,55 @@ export default function TeamRound1Page() {
                   <span>Operation Running ({formatTimer(localSecondsRemaining)} remaining)</span>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* END TEST CONFIRMATION MODAL */}
+      {showEndConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-500/20 border border-rose-500/40 text-rose-400 rounded-xl">
+                <Flag className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold font-mono text-white">END TEST NOW?</h3>
+                <p className="text-xs text-slate-400 font-mono">
+                  This locks in your final score and time. This cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2 font-mono text-xs">
+              <div className="flex justify-between text-slate-300">
+                <span>Time Remaining:</span>
+                <span className="text-amber-400 font-bold">{formatTimer(localSecondsRemaining)}</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>Current Score:</span>
+                <span className="text-emerald-400 font-bold">{team.score} pts</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEndConfirm(false)}
+                disabled={endLoading}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-bold rounded-xl transition-colors"
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                onClick={handleEndOperation}
+                disabled={endLoading}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg shadow-rose-950/50"
+              >
+                {endLoading ? "ENDING..." : "END TEST"}
+              </button>
             </div>
           </div>
         </div>

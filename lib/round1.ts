@@ -637,6 +637,61 @@ export async function startTeamRound1Timer(teamId: string): Promise<{
   }
 }
 
+/**
+ * Voluntarily end a team's Round 1 attempt early, freezing their score and
+ * time as final (equivalent to natural timer expiry).
+ */
+export async function endTeamRound1Timer(teamId: string): Promise<{
+  success: boolean;
+  message: string;
+  deadlineAt?: Date;
+}> {
+  const now = new Date();
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      eventId: true,
+      round1StartedAt: true,
+      round1DeadlineAt: true,
+    },
+  });
+
+  if (!team) {
+    return { success: false, message: "Team not found." };
+  }
+
+  if (!team.round1StartedAt) {
+    return { success: false, message: "Timer has not started yet." };
+  }
+
+  if (team.round1DeadlineAt && team.round1DeadlineAt <= now) {
+    return { success: true, message: "Timer already ended.", deadlineAt: team.round1DeadlineAt };
+  }
+
+  const updated = await prisma.team.update({
+    where: { id: teamId },
+    data: { round1DeadlineAt: now },
+    select: { round1DeadlineAt: true },
+  });
+
+  await logAuditEvent({
+    eventId: team.eventId,
+    teamId: team.id,
+    actor: "TEAM",
+    action: "ROUND1_ENDED_EARLY",
+    details: `Team ${team.name} voluntarily ended Round 1 early at ${now.toISOString()}.`,
+  });
+
+  return {
+    success: true,
+    message: "Round 1 ended. Your final score and time have been recorded.",
+    deadlineAt: updated.round1DeadlineAt!,
+  };
+}
+
 // Function to release backup questions (Q21-Q30)
 export async function releaseBackupQuestions(questionIds: string[]): Promise<{
   success: boolean;
