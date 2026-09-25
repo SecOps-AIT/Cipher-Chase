@@ -13,12 +13,20 @@ import { requireAdminSession } from "@/lib/auth";
  */
 export async function GET(request: Request) {
   try {
-    // Require admin authentication
-    await requireAdminSession();
+    console.log("[Leaderboard API] Starting request...");
     
+    // Require admin authentication
+    const session = await requireAdminSession();
+    console.log("[Leaderboard API] Admin authenticated:", session.email);
+    
+    console.log("[Leaderboard API] Fetching leaderboard data...");
     const data = await getAuthoritativeLeaderboard();
+    console.log("[Leaderboard API] Data fetched successfully, teams:", data.leaderboard?.length || 0);
+    
     return NextResponse.json(data);
   } catch (err: any) {
+    console.error("[Leaderboard API] Error:", err.message, err.stack);
+    
     if (err.message === "UNAUTHORIZED_ADMIN") {
       return NextResponse.json(
         { error: "Unauthorized: Admin access required. Leaderboard is not available to participants." },

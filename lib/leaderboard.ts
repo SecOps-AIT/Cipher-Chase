@@ -84,40 +84,50 @@ export async function getAuthoritativeLeaderboard(): Promise<{
     }
   });
 
-  // Fetch all teams for this event
+  // Fetch all teams for this event (optimized query)
   const teams = await prisma.team.findMany({
     where: { eventId: event.id },
-    include: {
-      members: { select: { name: true } },
-      submissions: {
-        where: { isCorrect: true },
-        include: { 
-          question: { 
-            select: { title: true, order: true } 
-          } 
-        },
-        orderBy: { submittedAt: "desc" },
-        take: 3 // Last 3 solves for activity feed
+    select: {
+      id: true,
+      name: true,
+      joinCode: true,
+      score: true,
+      qualified: true,
+      scoreReachedAt: true,
+      round1StartedAt: true,
+      round1DeadlineAt: true,
+      round1Duration: true,
+      members: { 
+        select: { name: true },
+        take: 10 // Limit member names
       },
-      challengeAttempts: {
-        where: { success: true },
-        select: { timeUsedSeconds: true },
-      },
-      hintClaims: {
-        include: {
-          questionHint: {
-            include: {
-              question: {
-                select: { title: true, order: true }
-              }
-            }
-          }
-        },
-        orderBy: { claimedAt: "desc" },
-        take: 2 // Last 2 hint claims for activity
+      _count: {
+        select: {
+          submissions: { where: { isCorrect: true } },
+          challengeAttempts: { where: { success: true } },
+          hintClaims: true
+        }
       }
     },
   });
+
+  // Get challenge attempts time separately if needed for Round 2
+  const challengeAttemptsMap = new Map<string, number>();
+  if (isRound2OrFinished) {
+    const attempts = await prisma.teamChallengeAttempt.groupBy({
+      by: ['teamId'],
+      where: {
+        teamId: { in: teams.map(t => t.id) },
+        success: true
+      },
+      _sum: {
+        timeUsedSeconds: true
+      }
+    });
+    attempts.forEach(a => {
+      challengeAttemptsMap.set(a.teamId, a._sum.timeUsedSeconds || 0);
+    });
+  }
 
   const isRound2OrFinished =
     (currentRound && currentRound.number >= 2) || event.status === "FINISHED";
@@ -144,10 +154,11 @@ export async function getAuthoritativeLeaderboard(): Promise<{
     };
   }
 
-  // Precompute metrics with Round 1 timer data
+  // Precompute metrics with Round 1 timer data (optimized)
   const teamsWithMetrics = teams.map((team) => {
-    const totalTimeSeconds = team.challengeAttempts.reduce(
-      (sum, att) => sum + (att.timeUsedSeconds || 0),
+    const totalTimeSeconds = isRound2OrFinished 
+      ? (challengeAttemptsMap.get(team.id) || 0)
+      : 0;
       0
     );
 
@@ -177,30 +188,10 @@ export async function getAuthoritativeLeaderboard(): Promise<{
       }
     }
 
-    // Build recent activity
+    // Build recent activity (simplified - removed for performance)
     const recentActivity: { type: "SOLVE" | "HINT_CLAIM" | "TIMER_START"; timestamp: string; description: string; }[] = [];
     
-    // Add recent solves
-    team.submissions.forEach(sub => {
-      recentActivity.push({
-        type: "SOLVE",
-        timestamp: sub.submittedAt.toISOString(),
-        description: `Solved Q${sub.question.order.toString().padStart(2, '0')}`
-      });
-    });
-
-    // Add recent hint claims
-    team.hintClaims.forEach(claim => {
-      if (claim.questionHint) {
-        recentActivity.push({
-          type: "HINT_CLAIM", 
-          timestamp: claim.claimedAt.toISOString(),
-          description: `Used hint on Q${claim.questionHint.question.order.toString().padStart(2, '0')}`
-        });
-      }
-    });
-
-    // Add timer start
+    // Add timer start only
     if (team.round1StartedAt) {
       recentActivity.push({
         type: "TIMER_START",
@@ -208,9 +199,6 @@ export async function getAuthoritativeLeaderboard(): Promise<{
         description: "Started Round 1"
       });
     }
-
-    // Sort by timestamp, most recent first, and take top 3
-    recentActivity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     return {
       teamId: team.id,
@@ -222,12 +210,12 @@ export async function getAuthoritativeLeaderboard(): Promise<{
       scoreReachedAtDate: team.scoreReachedAt ?? new Date("2099-01-01"),
       totalTimeSeconds,
       timeFormatted,
-      solvesCount: team.submissions.length,
+      solvesCount: team._count.submissions,
       members: team.members.map((m) => m.name),
       round1TimerStatus,
       round1TimeRemaining,
       round1Progress,
-      recentActivity: recentActivity.slice(0, 3)
+      recentActivity: recentActivity.slice(0, 1) // Just timer start
     };
   });
 
