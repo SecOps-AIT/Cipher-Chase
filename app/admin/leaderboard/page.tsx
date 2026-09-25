@@ -66,7 +66,7 @@ export default function AdminLeaderboardPage() {
     fetchLeaderboard();
 
     if (autoRefresh) {
-      const interval = setInterval(fetchLeaderboard, 3000); // Auto-refresh every 3 seconds
+      const interval = setInterval(fetchLeaderboard, 10000); // Auto-refresh every 10 seconds (reduced from 3s)
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);

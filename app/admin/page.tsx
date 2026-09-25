@@ -47,7 +47,7 @@ export default function AdminOverviewPage() {
 
   useEffect(() => {
     fetchOverview();
-    const interval = setInterval(fetchOverview, 3000);
+    const interval = setInterval(fetchOverview, 10000); // Reduced from 3s to 10s
     return () => clearInterval(interval);
   }, []);
 

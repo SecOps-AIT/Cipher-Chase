@@ -322,21 +322,8 @@ export async function submitRound1Answer({
     };
   }
 
-  // 3. Server-side Rate Limiting: Max 5 submissions per 10 seconds per team per question
-  const recentAttemptsCount = await prisma.submission.count({
-    where: {
-      teamId,
-      questionId,
-      submittedAt: { gte: new Date(now.getTime() - 10000) },
-    },
-  });
-
-  if (recentAttemptsCount >= 5) {
-    return {
-      success: false,
-      message: "Rate limit: Maximum 5 submissions per 10 seconds for this question. Please wait.",
-    };
-  }
+  // 3. Server-side Rate Limiting: Removed for performance - transaction isolation handles race conditions
+  // Teams can submit as fast as they can type during the timed competition
 
   // 4. Answer Normalization based on question.answerMode
   let isMatch = false;

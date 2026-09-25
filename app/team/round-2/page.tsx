@@ -124,7 +124,7 @@ export default function TeamRound2Page() {
       loadAuctionData();
       
       // Set up polling for real-time updates
-      const interval = setInterval(loadAuctionData, 2500);
+      const interval = setInterval(loadAuctionData, 5000); // Reduced from 2.5s to 5s
       return () => clearInterval(interval);
     }
   }, [teamState?.team]);

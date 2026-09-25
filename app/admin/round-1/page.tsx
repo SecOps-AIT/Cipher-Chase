@@ -137,7 +137,7 @@ export default function AdminRound1ControlPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 2000);
+    const interval = setInterval(fetchData, 5000); // Reduced from 2s to 5s
     return () => clearInterval(interval);
   }, [fetchData]);
 

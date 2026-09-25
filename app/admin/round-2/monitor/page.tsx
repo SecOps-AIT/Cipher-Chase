@@ -70,7 +70,7 @@ export default function Round2MonitorPage() {
     fetchData();
 
     if (autoRefresh) {
-      const interval = setInterval(fetchData, 3000); // Refresh every 3 seconds
+      const interval = setInterval(fetchData, 8000); // Refresh every 8 seconds (reduced from 3s)
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);

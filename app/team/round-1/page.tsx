@@ -218,15 +218,19 @@ export default function TeamRound1Page() {
     if (questionsData?.teamTimer?.status === "NOT_STARTED") {
       setSubmitFeedback({
         success: false,
-        message: "Operation timer has not started yet. Click 'START OPERATION' in the header to activate your 30-minute mission!",
+        message: "Operation timer has not started yet. Click 'START OPERATION' in the header to activate your 20-minute mission!",
       });
       return;
     }
 
+    // Prevent duplicate submissions
     setSubmitLoading(true);
     setSubmitFeedback(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
       const res = await fetch("/api/round-1/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -234,7 +238,10 @@ export default function TeamRound1Page() {
           questionId: selectedQuestion.id,
           answer: flagInput.trim(),
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await res.json();
 
@@ -243,8 +250,11 @@ export default function TeamRound1Page() {
           success: false,
           message: data.message || "This question has already been solved by your team.",
         });
-        refreshQuestions();
-        refreshTeam();
+        // Refresh in background without blocking
+        setTimeout(() => {
+          refreshQuestions();
+          refreshTeam();
+        }, 100);
         return;
       }
 
@@ -270,8 +280,11 @@ export default function TeamRound1Page() {
           message: data.message || "✓ Correct flag! Points awarded to your team.",
         });
         setFlagInput("");
-        refreshQuestions();
-        refreshTeam();
+        // Refresh in background
+        setTimeout(() => {
+          refreshQuestions();
+          refreshTeam();
+        }, 100);
       } else {
         setSubmitFeedback({
           success: false,
@@ -280,10 +293,17 @@ export default function TeamRound1Page() {
         });
       }
     } catch (err: any) {
-      setSubmitFeedback({
-        success: false,
-        message: err.message || "Network error. Please try again.",
-      });
+      if (err.name === 'AbortError') {
+        setSubmitFeedback({
+          success: false,
+          message: "Request timeout. Please try again.",
+        });
+      } else {
+        setSubmitFeedback({
+          success: false,
+          message: err.message || "Network error. Please try again.",
+        });
+      }
     } finally {
       setSubmitLoading(false);
     }
