@@ -29,8 +29,8 @@ import { CommandHeader } from "@/components/ui/CommandHeader";
 
 export default function TeamDashboardPage() {
   const router = useRouter();
-  const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(2000);
-  const { data: questionsData, loading: qLoading, refresh: refreshQuestions } = useActiveQuestions(2000);
+  const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(4000);
+  const { data: questionsData, loading: qLoading, refresh: refreshQuestions } = useActiveQuestions(4000);
 
   // Selected question modal state
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionView | null>(null);

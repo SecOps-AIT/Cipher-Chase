@@ -83,7 +83,7 @@ interface TeamAssignment {
 
 export default function TeamRound2Page() {
   const router = useRouter();
-  const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(2000);
+  const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(4000);
   
   // Server time sync for accurate timers
   const [serverTime, setServerTime] = useState<Date | null>(null);
@@ -124,7 +124,7 @@ export default function TeamRound2Page() {
       loadAuctionData();
       
       // Set up polling for real-time updates
-      const interval = setInterval(loadAuctionData, 2500);
+      const interval = setInterval(loadAuctionData, 4000);
       return () => clearInterval(interval);
     }
   }, [teamState?.team]);

@@ -159,7 +159,7 @@ export default function AdminLiveAuctionPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 2500);
+    const interval = setInterval(loadData, 4000);
     return () => clearInterval(interval);
   }, [loadData]);
 
