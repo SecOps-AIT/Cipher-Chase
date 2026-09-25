@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Gavel,
   Play,
@@ -105,7 +105,14 @@ export default function AdminLiveAuctionPage() {
   // View tab
   const [activeTab, setActiveTab] = useState<"auction" | "monitor">("auction");
 
+  const loadDataInFlightRef = useRef(false);
+
   const loadData = useCallback(async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (loadDataInFlightRef.current) return;
+    loadDataInFlightRef.current = true;
     try {
       // 1. Fetch auction questions directly
       const aqRes = await fetch("/api/admin/auction/questions");
@@ -146,6 +153,7 @@ export default function AdminLiveAuctionPage() {
       setError(err.message || "Failed to load live auction data");
     } finally {
       setLoading(false);
+      loadDataInFlightRef.current = false;
     }
   }, [round2Id, selectedQuestionId, selectedTeamId]);
 

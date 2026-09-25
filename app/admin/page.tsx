@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
   Shield,
@@ -18,8 +18,14 @@ import {
 export default function AdminOverviewPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const inFlightRef = useRef(false);
 
   const fetchOverview = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const [lbRes, teamsRes, qRes] = await Promise.all([
         fetch("/api/leaderboard", { cache: "no-store" }),
@@ -42,6 +48,7 @@ export default function AdminOverviewPage() {
       console.error(err);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 

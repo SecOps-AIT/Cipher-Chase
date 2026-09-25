@@ -33,8 +33,8 @@ import { CommandHeader } from "@/components/ui/CommandHeader";
 export default function TeamRound1Page() {
   const router = useRouter();
   // Poll team state and challenges state every 1.5 seconds for instant cross-device updates (Section 11)
-  const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(1500);
-  const { data: questionsData, loading: qLoading, refresh: refreshQuestions } = useActiveQuestions(1500);
+  const { state: teamState, loading: teamLoading, refresh: refreshTeam } = useTeamState(3000);
+  const { data: questionsData, loading: qLoading, refresh: refreshQuestions } = useActiveQuestions(3000);
 
   // Tutorial Briefing & Demo Flag modal state
   const [showTutorialModal, setShowTutorialModal] = useState(false);

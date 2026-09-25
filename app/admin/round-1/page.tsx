@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   PlayCircle,
   PauseCircle,
@@ -63,7 +63,14 @@ export default function AdminRound1ControlPage() {
     return () => clearInterval(timer);
   }, []);
 
+  const fetchDataInFlightRef = useRef(false);
+
   const fetchData = useCallback(async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (fetchDataInFlightRef.current) return;
+    fetchDataInFlightRef.current = true;
     try {
       const [qRes, lbRes, statusRes] = await Promise.all([
         fetch("/api/admin/questions", { cache: "no-store" }),
@@ -87,6 +94,7 @@ export default function AdminRound1ControlPage() {
       console.error(err);
     } finally {
       setLoading(false);
+      fetchDataInFlightRef.current = false;
     }
   }, []);
 

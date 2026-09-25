@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSupabaseRealtime } from "./useSupabaseRealtime";
 
 export interface TeamState {
@@ -30,8 +30,14 @@ export function useTeamState(pollIntervalMs: number = 3000) {
   const [state, setState] = useState<TeamState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const fetchTeamState = useCallback(async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const res = await fetch("/api/team/me", { cache: "no-store" });
       if (res.status === 401) {
@@ -47,6 +53,7 @@ export function useTeamState(pollIntervalMs: number = 3000) {
       setError(err.message);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   }, []);
 

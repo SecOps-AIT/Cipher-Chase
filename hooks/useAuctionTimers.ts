@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { formatTime } from "@/lib/round2-auction";
 
 interface AssignmentTimer {
@@ -177,9 +177,15 @@ export function useAssignmentTimer(
 export function useServerTime(pollingInterval: number = 30000) {
   const [serverTime, setServerTime] = useState<Date | null>(null);
   const [offset, setOffset] = useState<number>(0);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     const fetchServerTime = async () => {
+      // Skip this tick if the previous request hasn't resolved yet — prevents
+      // requests piling up unboundedly when the DB round-trip is slower than
+      // the poll interval (e.g. cross-region latency).
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const requestStart = Date.now();
         const res = await fetch("/api/auction/time");
@@ -198,6 +204,8 @@ export function useServerTime(pollingInterval: number = 30000) {
         }
       } catch (error) {
         console.error("Failed to sync server time:", error);
+      } finally {
+        inFlightRef.current = false;
       }
     };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -476,22 +476,31 @@ function Round2TeamPanel({
   hintMessage: string | null;
 }) {
   const [r2State, setR2State] = useState<any>(null);
+  const r2InFlightRef = useRef(false);
 
   const fetchR2 = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (r2InFlightRef.current) return;
+    r2InFlightRef.current = true;
     try {
       const res = await fetch("/api/round-2/state", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         setR2State(json);
       }
-    } catch {}
+    } catch {
+    } finally {
+      r2InFlightRef.current = false;
+    }
   };
 
-  useState(() => {
+  useEffect(() => {
     fetchR2();
     const interval = setInterval(fetchR2, 2000);
     return () => clearInterval(interval);
-  });
+  }, []);
 
   const challenge = r2State?.challenge;
   const { formattedTime, isExpired } = useChallengeTimer(

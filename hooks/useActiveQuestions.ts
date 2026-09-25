@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { QuestionView } from "@/lib/round1";
 import { useSupabaseRealtime } from "./useSupabaseRealtime";
 
@@ -31,8 +31,14 @@ export function useActiveQuestions(pollIntervalMs: number = 3000) {
   const [data, setData] = useState<QuestionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const fetchQuestions = useCallback(async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const res = await fetch("/api/round-1/questions", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load questions");
@@ -43,6 +49,7 @@ export function useActiveQuestions(pollIntervalMs: number = 3000) {
       setError(err.message);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   }, []);
 

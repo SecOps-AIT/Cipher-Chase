@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -75,7 +75,14 @@ export default function Round2MonitorPage() {
     }
   }, [autoRefresh]);
 
+  const inFlightRef = useRef(false);
+
   const fetchData = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const res = await fetch("/api/admin/round-2/monitor");
       if (res.ok) {
@@ -86,6 +93,7 @@ export default function Round2MonitorPage() {
       console.error("Failed to fetch monitoring data:", error);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 

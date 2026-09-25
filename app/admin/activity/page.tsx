@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Activity,
   Shield,
@@ -54,7 +54,14 @@ export default function AdminActivityPage() {
     }
   }, [autoRefresh, actorFilter, actionFilter]);
 
+  const fetchActivitiesInFlightRef = useRef(false);
+
   const fetchActivities = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (fetchActivitiesInFlightRef.current) return;
+    fetchActivitiesInFlightRef.current = true;
     try {
       const params = new URLSearchParams();
       params.append("limit", "50");
@@ -72,6 +79,7 @@ export default function AdminActivityPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+      fetchActivitiesInFlightRef.current = false;
     }
   };
 

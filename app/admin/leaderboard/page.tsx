@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Shield, Trophy, Clock, Sparkles, Zap, Award, Timer, Users, Target, Activity, RefreshCw } from "lucide-react";
 
 interface LeaderboardEntry {
@@ -35,7 +35,14 @@ export default function AdminLeaderboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [localTimers, setLocalTimers] = useState<{[teamId: string]: number}>({});
 
+  const inFlightRef = useRef(false);
+
   const fetchLeaderboard = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const res = await fetch("/api/leaderboard", { cache: "no-store" });
       if (!res.ok) {
@@ -59,6 +66,7 @@ export default function AdminLeaderboardPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 

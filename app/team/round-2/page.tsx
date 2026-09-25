@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -129,17 +129,24 @@ export default function TeamRound2Page() {
     }
   }, [teamState?.team]);
 
+  const loadAuctionDataInFlightRef = useRef(false);
+
   const loadAuctionData = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (loadAuctionDataInFlightRef.current) return;
+    loadAuctionDataInFlightRef.current = true;
     try {
       setError(null);
-      
+
       // Load server time for timer sync
       const timeRes = await fetch("/api/auction/time");
       if (timeRes.ok) {
         const { serverTime: serverTimeStr } = await timeRes.json();
         setServerTime(new Date(serverTimeStr));
       }
-      
+
       // Load live auctions
       const auctionsRes = await fetch("/api/auction/live");
       if (auctionsRes.ok) {
@@ -159,6 +166,7 @@ export default function TeamRound2Page() {
       setError("Failed to load auction data");
     } finally {
       setLoading(false);
+      loadAuctionDataInFlightRef.current = false;
     }
   };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { History, Filter, RefreshCw } from "lucide-react";
 
 export default function AdminAuditPage() {
@@ -9,7 +9,14 @@ export default function AdminAuditPage() {
   const [actorFilter, setActorFilter] = useState("");
   const [actionQuery, setActionQuery] = useState("");
 
+  const inFlightRef = useRef(false);
+
   const fetchLogs = async () => {
+    // Skip this tick if the previous request hasn't resolved yet — prevents
+    // requests piling up unboundedly when the DB round-trip is slower than
+    // the poll interval (e.g. cross-region latency).
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const params = new URLSearchParams();
       if (actorFilter) params.set("actor", actorFilter);
@@ -25,6 +32,7 @@ export default function AdminAuditPage() {
       console.error(err);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 
