@@ -111,30 +111,52 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await requireAdminSession();
-    const team = await prisma.team.findUnique({ where: { id: params.id } });
-    if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    const team = await prisma.team.findUnique({ 
+      where: { id: params.id },
+      include: {
+        members: true,
+        submissions: true,
+        scoreEvents: true,
+        auctionBids: true,
+        auctionSales: true,
+        challengeAssignments: true
+      }
+    });
+    
+    if (!team) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
 
+    // Delete team (cascade will handle related records)
     await prisma.team.delete({ where: { id: params.id } });
 
+    // Log after successful deletion
     await logAuditEvent({
       eventId: team.eventId,
       actor: "ADMIN",
       action: "TEAM_DELETED",
-      details: `Team "${team.name}" was deleted.`,
+      details: `Team "${team.name}" (${team.members.length} members, ${team.submissions.length} submissions) was deleted.`,
     });
 
     await logActivity({
       action: ActivityActions.TEAM_DELETED,
       performedBy: session.email,
       details: `Deleted team "${team.name}"`,
-      metadata: { teamName: team.name, joinCode: team.joinCode }
+      metadata: { teamName: team.name, joinCode: team.joinCode, membersCount: team.members.length }
     });
 
-    return NextResponse.json({ success: true, message: "Team deleted" });
+    return NextResponse.json({ 
+      success: true, 
+      message: `Team "${team.name}" deleted successfully` 
+    });
   } catch (err: any) {
+    console.error("Team deletion error:", err);
     if (err.message === "UNAUTHORIZED_ADMIN") {
       return NextResponse.json({ error: "Unauthorized: Admin access required" }, { status: 403 });
     }
-    return NextResponse.json({ error: err.message || "Failed to delete team" }, { status: 500 });
+    return NextResponse.json({ 
+      error: `Failed to delete team: ${err.message}`,
+      details: err.code || "Unknown error"
+    }, { status: 500 });
   }
 }
