@@ -350,7 +350,7 @@ export async function submitRound1Answer({
     isMatch = cleanAnswer === question.answer.trim();
   }
 
-  // 5. Execute in database transaction to eliminate race conditions
+  // 5. Execute in database transaction (optimized for speed)
   try {
     const outcome = await prisma.$transaction(
       async (tx) => {
@@ -423,9 +423,9 @@ export async function submitRound1Answer({
         }
       },
       { 
-        maxWait: 10000, 
-        timeout: 15000,
-        isolationLevel: "Serializable"
+        maxWait: 2000,  // Reduced from 10s to 2s
+        timeout: 5000,   // Reduced from 15s to 5s
+        isolationLevel: "ReadCommitted" // Changed from Serializable - much faster!
       }
     );
 
