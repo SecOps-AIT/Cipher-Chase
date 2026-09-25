@@ -290,7 +290,8 @@ export default function AdminRound1ControlPage() {
           reason: adjustReason.trim(),
         }),
       });
-      if (!res.ok) throw new Error("Failed to adjust score");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to adjust score");
       setShowAdjustModal(false);
       setAdjustPoints(0);
       setAdjustReason("");

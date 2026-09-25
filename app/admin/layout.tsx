@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/admin/teams", label: "TEAMS REGISTRY", icon: Users },
   { href: "/admin/questions", label: "QUESTIONS BANK", icon: FileQuestion },
   { href: "/admin/round-1", label: "ROUND 1 CONTROL", icon: PlayCircle },
+  { href: "/admin/round-2/questions", label: "ROUND 2 QUESTIONS", icon: FileQuestion },
   { href: "/admin/auction", label: "ROUND 2 AUCTION", icon: Gavel },
   { href: "/admin/qualification", label: "QUALIFICATION", icon: Calculator },
   { href: "/admin/audit", label: "AUDIT LOGS", icon: History },

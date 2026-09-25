@@ -12,6 +12,7 @@ import {
   Plus,
   X,
   FileIcon,
+  Gavel,
 } from "lucide-react";
 
 interface Attachment {
@@ -24,23 +25,39 @@ interface Attachment {
   uploadedAt: string;
 }
 
-interface Question {
+interface AuctionQuestion {
   id: string;
+  questionId: string;
   title: string;
-  description: string;
-  answer: string;
+  topic: string;
+  outline: string;
+  baseTimeSeconds: number;
   points: number;
-  difficulty: string;
-  category: string;
+  hintPenalty: number;
+  status: string;
 }
 
 export default function AdminRound2QuestionsPage() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+  const [questions, setQuestions] = useState<AuctionQuestion[]>([]);
+  const [selectedQuestion, setSelectedQuestion] = useState<AuctionQuestion | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // Create question modal state
+  const [showModal, setShowModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [difficulty, setDifficulty] = useState("MEDIUM");
+  const [category, setCategory] = useState("Web Security");
+  const [topic, setTopic] = useState("");
+  const [outline, setOutline] = useState("");
+  const [baseTimeSeconds, setBaseTimeSeconds] = useState(300);
+  const [points, setPoints] = useState(200);
+  const [hintPenalty, setHintPenalty] = useState(-10);
 
   useEffect(() => {
     fetchQuestions();
@@ -48,19 +65,18 @@ export default function AdminRound2QuestionsPage() {
 
   useEffect(() => {
     if (selectedQuestion) {
-      fetchAttachments(selectedQuestion.id);
+      fetchAttachments(selectedQuestion.questionId);
     }
   }, [selectedQuestion]);
 
   const fetchQuestions = async () => {
     try {
       setLoading(true);
-      // Fetch Round 2 questions - you may need to adjust this endpoint based on your setup
-      const res = await fetch("/api/admin/questions?roundNumber=2");
+      const res = await fetch("/api/admin/auction/questions");
       if (!res.ok) throw new Error("Failed to fetch questions");
-      
+
       const data = await res.json();
-      setQuestions(data.questions || []);
+      setQuestions(data.auctionQuestions || []);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -68,11 +84,77 @@ export default function AdminRound2QuestionsPage() {
     }
   };
 
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setAnswer("");
+    setDifficulty("MEDIUM");
+    setCategory("Web Security");
+    setTopic("");
+    setOutline("");
+    setBaseTimeSeconds(300);
+    setPoints(200);
+    setHintPenalty(-10);
+  };
+
+  const handleCreateQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/auction/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description,
+          answer,
+          difficulty,
+          category,
+          topic,
+          outline,
+          baseTimeSeconds,
+          points,
+          hintPenalty,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create auction question");
+
+      setMessage({ type: 'success', text: `Auction question "${title}" created` });
+      setShowModal(false);
+      resetForm();
+      fetchQuestions();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleDeleteQuestion = async (q: AuctionQuestion) => {
+    if (!confirm(`Delete auction question "${q.title}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/auction/questions?id=${q.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete auction question");
+
+      setMessage({ type: 'success', text: `Auction question "${q.title}" deleted` });
+      if (selectedQuestion?.id === q.id) setSelectedQuestion(null);
+      fetchQuestions();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  };
+
   const fetchAttachments = async (questionId: string) => {
     try {
       const res = await fetch(`/api/admin/round-2/attachments?questionId=${questionId}`);
       if (!res.ok) throw new Error("Failed to fetch attachments");
-      
+
       const data = await res.json();
       setAttachments(data.attachments || []);
     } catch (err: any) {
@@ -98,7 +180,7 @@ export default function AdminRound2QuestionsPage() {
       // Step 1: Upload file to storage
       const uploadForm = new FormData();
       uploadForm.append("file", file);
-      
+
       const uploadRes = await fetch("/api/admin/questions/upload", {
         method: "POST",
         body: uploadForm,
@@ -116,7 +198,7 @@ export default function AdminRound2QuestionsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          questionId: selectedQuestion.id,
+          questionId: selectedQuestion.questionId,
           filename: uploaded.name,
           originalName: file.name,
           mimeType: file.type,
@@ -131,8 +213,8 @@ export default function AdminRound2QuestionsPage() {
       }
 
       setMessage({ type: 'success', text: `File "${file.name}" uploaded successfully` });
-      fetchAttachments(selectedQuestion.id);
-      
+      fetchAttachments(selectedQuestion.questionId);
+
       // Reset file input
       e.target.value = "";
     } catch (err: any) {
@@ -157,7 +239,7 @@ export default function AdminRound2QuestionsPage() {
 
       setMessage({ type: 'success', text: `Attachment "${filename}" deleted` });
       if (selectedQuestion) {
-        fetchAttachments(selectedQuestion.id);
+        fetchAttachments(selectedQuestion.questionId);
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -175,19 +257,29 @@ export default function AdminRound2QuestionsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-slate-800 pb-6">
-        <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">
-          ROUND 2 MANAGEMENT
-        </span>
-        <h1 className="text-2xl font-bold font-mono text-white">Question Attachments</h1>
-        <p className="text-sm text-slate-400 mt-2">
-          Upload files for Round 2 questions (PDF, ZIP, PCAP, etc.)
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-6">
+        <div>
+          <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">
+            ROUND 2 MANAGEMENT
+          </span>
+          <h1 className="text-2xl font-bold font-mono text-white">Auction Questions</h1>
+          <p className="text-sm text-slate-400 mt-2">
+            Create auction challenges and manage their attachments (PDF, ZIP, PCAP, etc.)
+          </p>
+        </div>
+
+        <button
+          onClick={() => setShowModal(true)}
+          className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold font-mono text-xs tracking-wider rounded-xl flex items-center gap-2 transition-all shadow-cyan-glow"
+        >
+          <Plus className="w-4 h-4" />
+          ADD AUCTION QUESTION
+        </button>
       </div>
 
       {message && (
         <div className={`p-4 rounded-xl flex items-center gap-3 ${
-          message.type === 'success' 
+          message.type === 'success'
             ? 'bg-emerald-500/10 border border-emerald-500/50 text-emerald-300'
             : 'bg-red-500/10 border border-red-500/50 text-red-300'
         }`}>
@@ -211,8 +303,8 @@ export default function AdminRound2QuestionsPage() {
         <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-slate-800">
             <h3 className="text-sm font-bold font-mono text-white flex items-center gap-2">
-              <FileText className="w-4 h-4 text-cyan-400" />
-              Round 2 Questions
+              <Gavel className="w-4 h-4 text-cyan-400" />
+              Round 2 Auction Questions
             </h3>
           </div>
           <div className="overflow-y-auto max-h-[600px]">
@@ -222,29 +314,43 @@ export default function AdminRound2QuestionsPage() {
               </div>
             ) : questions.length === 0 ? (
               <div className="p-8 text-center text-slate-500 font-mono text-sm">
-                No Round 2 questions found
+                No Round 2 questions found. Click "Add Auction Question" to create one.
               </div>
             ) : (
               <div className="space-y-1 p-2">
                 {questions.map((q) => (
-                  <button
+                  <div
                     key={q.id}
-                    onClick={() => setSelectedQuestion(q)}
-                    className={`w-full text-left p-3 rounded-lg transition-all ${
+                    className={`w-full text-left p-3 rounded-lg transition-all cursor-pointer ${
                       selectedQuestion?.id === q.id
                         ? 'bg-cyan-500/20 border border-cyan-500/50'
                         : 'bg-slate-950/50 border border-slate-800 hover:border-slate-700'
                     }`}
+                    onClick={() => setSelectedQuestion(q)}
                   >
-                    <div className="font-mono text-sm text-white font-bold truncate">
-                      {q.title}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-mono text-sm text-white font-bold truncate">
+                        {q.title}
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q); }}
+                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded shrink-0"
+                        title="Delete Auction Question"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
                       <span>{q.points} pts</span>
                       <span>•</span>
-                      <span>{q.difficulty}</span>
+                      <span>{q.topic}</span>
+                      <span>•</span>
+                      <span className={`font-bold ${
+                        q.status === "SOLD" ? "text-emerald-400" :
+                        q.status === "OPEN" ? "text-amber-400" : "text-slate-500"
+                      }`}>{q.status}</span>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -260,7 +366,7 @@ export default function AdminRound2QuestionsPage() {
                   {selectedQuestion.title}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  {selectedQuestion.description}
+                  {selectedQuestion.outline}
                 </p>
               </div>
 
@@ -339,6 +445,188 @@ export default function AdminRound2QuestionsPage() {
           )}
         </div>
       </div>
+
+      {/* CREATE AUCTION QUESTION MODAL */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8">
+            <button
+              onClick={() => { setShowModal(false); resetForm(); }}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-6">
+              <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
+                <Gavel className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold font-mono text-white">ADD AUCTION QUESTION</h3>
+                <p className="text-xs text-slate-400">
+                  Create a Round 2 challenge. Points are admin-set with no time bonus.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateQuestion} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Title <span className="text-cyan-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Auction 03 — Reverse Engineering"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Topic <span className="text-cyan-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Reverse Engineering"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Category <span className="text-cyan-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Outline (shown to teams before bidding) <span className="text-cyan-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Crack the binary to reveal the flag"
+                  value={outline}
+                  onChange={(e) => setOutline(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Description / Prompt (shown after winning bid) <span className="text-cyan-400">*</span>
+                </label>
+                <textarea
+                  placeholder="Full challenge details..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  required
+                  rows={3}
+                  className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                  Secret Flag / Answer <span className="text-cyan-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. FLAG{REVERSED_AND_CONQUERED}"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Points
+                  </label>
+                  <input
+                    type="number"
+                    value={points}
+                    onChange={(e) => setPoints(parseInt(e.target.value, 10))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Hint Penalty
+                  </label>
+                  <input
+                    type="number"
+                    value={hintPenalty}
+                    onChange={(e) => setHintPenalty(parseInt(e.target.value, 10))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Difficulty
+                  </label>
+                  <select
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                  >
+                    <option value="EASY">EASY</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HARD">HARD</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+                    Base Time (sec)
+                  </label>
+                  <input
+                    type="number"
+                    value={baseTimeSeconds}
+                    onChange={(e) => setBaseTimeSeconds(parseInt(e.target.value, 10))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowModal(false); resetForm(); }}
+                  className="px-4 py-2 text-xs font-mono text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading || !title.trim() || !answer.trim() || !topic.trim() || !outline.trim()}
+                  className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {createLoading ? "Creating..." : "Save Auction Question"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

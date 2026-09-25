@@ -1,9 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { createAuctionQuestion } from "@/lib/round2-auction";
 import { validateAdminAuth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/audit";
 
+// Create a Round 2 auction question: this creates the underlying Question
+// row (roundId = Round 2) together with its AuctionQuestion wrapper in one
+// step, since auction questions are authored directly (no separate bank).
 export async function POST(request: NextRequest) {
   try {
     const adminAuth = await validateAdminAuth(request);
@@ -13,18 +17,22 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      roundId,
-      questionId,
       title,
+      description,
+      answer,
+      difficulty,
+      category,
       topic,
       outline,
       baseTimeSeconds,
       points,
-      hintPenalty
+      hintPenalty,
     } = body;
 
-    // Validate required fields
-    if (!roundId || !questionId || !title || !topic || !outline || !baseTimeSeconds || !points) {
+    if (
+      !title || !description || !answer || !difficulty || !category ||
+      !topic || !outline || !baseTimeSeconds || !points
+    ) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -38,25 +46,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await createAuctionQuestion({
-      roundId,
-      questionId,
-      title,
-      topic,
-      outline,
-      baseTimeSeconds,
-      points,
-      hintPenalty: hintPenalty || -10 // Default -10 if not provided
+    const round2 = await prisma.round.findFirst({ where: { number: 2 } });
+    if (!round2) {
+      return NextResponse.json({ error: "Round 2 not found" }, { status: 400 });
+    }
+
+    const { question, auctionQuestion } = await prisma.$transaction(async (tx) => {
+      const question = await tx.question.create({
+        data: {
+          roundId: round2.id,
+          title,
+          description,
+          answer,
+          points,
+          difficulty,
+          category,
+          isActive: true,
+          isCore: true,
+          isReleased: false,
+          order: 0,
+        },
+      });
+
+      const auctionQuestion = await tx.auctionQuestion.create({
+        data: {
+          roundId: round2.id,
+          questionId: question.id,
+          title,
+          topic,
+          outline,
+          baseTimeSeconds,
+          points,
+          hintPenalty: hintPenalty ?? -10,
+          status: "DRAFT",
+        },
+      });
+
+      return { question, auctionQuestion };
     });
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.message }, { status: 400 });
-    }
+    await logAuditEvent({
+      eventId: round2.eventId,
+      actor: "ADMIN",
+      action: "AUCTION_QUESTION_CREATED",
+      details: `Created auction question "${title}" (${points} pts)`,
+    });
 
     return NextResponse.json({
       success: true,
-      message: result.message,
-      auctionQuestion: result.auctionQuestion
+      auctionQuestion: {
+        id: auctionQuestion.id,
+        questionId: question.id,
+        title: auctionQuestion.title,
+        topic: auctionQuestion.topic,
+        outline: auctionQuestion.outline,
+        baseTimeSeconds: auctionQuestion.baseTimeSeconds,
+        points: auctionQuestion.points,
+        hintPenalty: auctionQuestion.hintPenalty,
+        status: auctionQuestion.status,
+        answer: question.answer,
+        difficulty: question.difficulty,
+        category: question.category,
+      },
     });
   } catch (error: any) {
     console.error("Create auction question error:", error);
@@ -149,6 +200,49 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Get auction questions error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// Delete an auction question (and its underlying question)
+export async function DELETE(request: NextRequest) {
+  try {
+    const adminAuth = await validateAdminAuth(request);
+    if (!adminAuth.success) {
+      return NextResponse.json({ error: adminAuth.error }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+
+    const auctionQuestion = await prisma.auctionQuestion.findUnique({
+      where: { id },
+      select: { id: true, questionId: true, status: true },
+    });
+
+    if (!auctionQuestion) {
+      return NextResponse.json({ error: "Auction question not found" }, { status: 404 });
+    }
+
+    if (auctionQuestion.status === "SOLD") {
+      return NextResponse.json(
+        { error: "Cannot delete an auction question that has already been sold" },
+        { status: 400 }
+      );
+    }
+
+    // Deleting the underlying Question cascades to the AuctionQuestion (and its bids/sale)
+    await prisma.question.delete({ where: { id: auctionQuestion.questionId } });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Delete auction question error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
