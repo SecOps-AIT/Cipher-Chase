@@ -1009,7 +1009,7 @@ export default function TeamRound1Page() {
                   <span>15 OPERATION TARGETS</span>
                 </div>
                 <p className="text-slate-300 pl-7 leading-relaxed">
-                  Round 1 features <strong className="text-white">exactly 15 challenges</strong> spanning Cryptography, Web Security, Network Forensics, and Reverse Engineering. Point values range from 10 to 25 points based on difficulty.
+                  Round 1 features <strong className="text-white">exactly 15 challenges</strong> spanning Cryptography, Web Security, Network Forensics, and Reverse Engineering. Point values range from 100 to 250 points based on difficulty.
                 </p>
               </div>
 
