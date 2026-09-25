@@ -440,7 +440,7 @@ export default function TeamRound1Page() {
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="text-cyan-400 font-mono shrink-0">•</span>
-                      <span><strong className="text-white">20 Vault Challenges:</strong> 20 security challenges spanning Crypto, Web, Forensics, and Reverse Engineering</span>
+                      <span><strong className="text-white">15 Vault Challenges:</strong> 15 security challenges spanning Crypto, Web, Forensics, and Reverse Engineering</span>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -473,7 +473,7 @@ export default function TeamRound1Page() {
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">Available Questions:</span>
                   <span className="font-bold text-cyan-300">
-                    {questionsData?.questions?.length || 20} Challenges
+                    {questionsData?.questions?.length || 15} Challenges
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -536,7 +536,7 @@ export default function TeamRound1Page() {
             <div>
               <h3 className="text-xl font-bold text-white flex items-center gap-3 mb-2">
                 <Zap className="w-5 h-5 text-cyan-400" />
-                CYBERSECURITY CHALLENGES (20 TARGETS)
+                CYBERSECURITY CHALLENGES (15 TARGETS)
               </h3>
               <div className="space-y-1 text-xs text-slate-400">
                 <p className="flex items-center gap-2">
@@ -549,7 +549,7 @@ export default function TeamRound1Page() {
                 </p>
                 <p className="flex items-center gap-2">
                   <span className="w-1 h-1 bg-amber-400 rounded-full"></span>
-                  Progressive hints available for all 20 vault challenges
+                  Progressive hints available for all 15 vault challenges
                 </p>
               </div>
             </div>
@@ -1000,7 +1000,7 @@ export default function TeamRound1Page() {
 
             {/* Step-by-Step Guide */}
             <div className="space-y-4 text-xs">
-              {/* Point 1: 20 Challenges */}
+              {/* Point 1: 15 Challenges */}
               <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
                 <div className="flex items-center gap-2 font-mono font-bold text-white text-xs">
                   <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-[10px] shrink-0 border border-cyan-500/30">
