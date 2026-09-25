@@ -103,6 +103,14 @@ export default function TeamRound1Page() {
     }
   }, [questionsData, selectedQuestion]);
 
+  // If the team gets marked qualified while sitting on Round 1 (e.g. admin
+  // qualifies them once Round 1 wraps up), move them to the Round 2 desk.
+  useEffect(() => {
+    if (teamState?.team?.qualified) {
+      router.push("/team/round-2");
+    }
+  }, [teamState?.team?.qualified, router]);
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/team/join");

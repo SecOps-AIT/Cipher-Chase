@@ -31,6 +31,7 @@ export default function TeamJoinPage() {
     maxMembers: number;
     members: string[];
     currentMember: string;
+    qualified: boolean;
   } | null>(null);
 
   const handleJoinTeam = async (e: React.FormEvent) => {
@@ -69,6 +70,7 @@ export default function TeamJoinPage() {
         maxMembers: data.team.maxMembers,
         members: data.team.members,
         currentMember: data.team.currentMember,
+        qualified: data.team.qualified,
       });
     } catch (err: any) {
       setError(err.message);
@@ -177,7 +179,7 @@ export default function TeamJoinPage() {
 
             {/* Explicit Proceed Button */}
             <button
-              onClick={() => router.push("/team/round-1")}
+              onClick={() => router.push(joinSuccess.qualified ? "/team/round-2" : "/team/round-1")}
               className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs tracking-wider rounded-xl flex items-center justify-center gap-2 transition-all shadow-cyan-glow cursor-pointer"
             >
               <span>PROCEED TO MISSION TERMINAL</span>
