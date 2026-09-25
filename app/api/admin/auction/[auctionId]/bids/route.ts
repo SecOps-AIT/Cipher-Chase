@@ -1,14 +1,15 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAuctionBids } from "@/lib/round2-auction";
-import { validateAdminAuth } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { auctionId: string } }
 ) {
   try {
+    const { validateAdminAuth } = await import("@/lib/auth");
+    const { getAuctionBids } = await import("@/lib/round2-auction");
+
     const adminAuth = await validateAdminAuth(request);
     if (!adminAuth.success) {
       return NextResponse.json({ error: adminAuth.error }, { status: 401 });

@@ -66,14 +66,6 @@ export default function HomePage() {
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
 
-          <Link
-            href="/leaderboard"
-            className="group px-6 py-4 bg-[#090D16] hover:bg-[#0E1526] border border-[#1E293B] hover:border-cyan-500/40 text-white font-semibold rounded-xl flex items-center justify-center gap-3 transition-all cursor-pointer"
-          >
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span className="font-mono text-xs tracking-widest uppercase">LIVE SCOREBOARD</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-slate-500" />
-          </Link>
         </div>
       </section>
 

@@ -31,7 +31,7 @@ export async function GET() {
 
     return NextResponse.json({
       round,
-      defaultDuration: sampleTeam?.round1Duration || 1800,
+      defaultDuration: sampleTeam?.round1Duration || 1200,
       durationOptions: [
         { label: "10 minutes", value: 600 },
         { label: "15 minutes", value: 900 },

@@ -33,6 +33,7 @@ export default function AdminQuestionsPage() {
   const [releaseMinutesFromNow, setReleaseMinutesFromNow] = useState(0);
   const [durationMinutes, setDurationMinutes] = useState(20);
   const [createLoading, setCreateLoading] = useState(false);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
 
   const fetchQuestions = async () => {
     try {
@@ -62,12 +63,24 @@ export default function AdminQuestionsPage() {
     const closeAt = new Date(releaseAt.getTime() + durationMinutes * 60 * 1000);
 
     try {
+      const attachmentUrls: string[] = [];
+      for (const file of attachmentFiles) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", file);
+        const upload = await fetch("/api/admin/questions/upload", { method: "POST", body: uploadForm });
+        const uploaded = await upload.json();
+        if (!upload.ok) throw new Error(uploaded.error || `Could not upload ${file.name}`);
+        attachmentUrls.push(uploaded.url);
+      }
+
       const res = await fetch("/api/admin/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          description,
+          description: attachmentUrls.length
+            ? `${description}\n\nAttachments:\n${attachmentUrls.join("\n")}`
+            : description,
           answer,
           points,
           difficulty,
@@ -84,6 +97,7 @@ export default function AdminQuestionsPage() {
       setShowModal(false);
       setTitle("");
       setDescription("");
+      setAttachmentFiles([]);
       setAnswer("");
       fetchQuestions();
     } catch (err: any) {
@@ -301,6 +315,12 @@ export default function AdminQuestionsPage() {
                   rows={3}
                   className="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">Question Attachments</label>
+                <input type="file" multiple onChange={(e) => setAttachmentFiles(Array.from(e.target.files || []))} className="w-full text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/15 file:px-3 file:py-2 file:text-cyan-300" />
+                <p className="mt-1 text-[11px] text-slate-500">Files are uploaded to the configured Supabase Storage bucket (25 MB per file).</p>
               </div>
 
               <div>

@@ -19,19 +19,19 @@ export async function POST(request: NextRequest) {
       topic,
       outline,
       baseTimeSeconds,
-      basePoints,
-      bonusFormula
+      points,
+      hintPenalty
     } = body;
 
     // Validate required fields
-    if (!roundId || !questionId || !title || !topic || !outline || !baseTimeSeconds || !basePoints) {
+    if (!roundId || !questionId || !title || !topic || !outline || !baseTimeSeconds || !points) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    if (baseTimeSeconds <= 0 || basePoints <= 0) {
+    if (baseTimeSeconds <= 0 || points <= 0) {
       return NextResponse.json(
         { error: "Base time and points must be positive" },
         { status: 400 }
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
       topic,
       outline,
       baseTimeSeconds,
-      basePoints,
-      bonusFormula
+      points,
+      hintPenalty: hintPenalty || -10 // Default -10 if not provided
     });
 
     if (!result.success) {
@@ -117,7 +117,8 @@ export async function GET(request: NextRequest) {
       topic: aq.topic,
       outline: aq.outline,
       baseTimeSeconds: aq.baseTimeSeconds,
-      basePoints: aq.basePoints,
+      points: aq.points, // Admin-set points
+      hintPenalty: aq.hintPenalty, // Admin-set hint penalty
       status: aq.status,
       displayedAt: aq.displayedAt?.toISOString() || null,
       auctionClosedAt: aq.auctionClosedAt?.toISOString() || null,

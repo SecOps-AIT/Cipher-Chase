@@ -1,19 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getTeamSession } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { releaseBackupQuestions } from "@/lib/round1";
 
 // GET all backup questions with their release status
 export async function GET() {
   try {
-    const session = await getTeamSession();
-    
-    // TODO: Add admin role check here
-    if (!session) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    await requireAdminSession();
 
     // Get Round 1
     const round1 = await prisma.round.findFirst({
@@ -68,12 +63,7 @@ export async function GET() {
 // POST to release selected backup questions
 export async function POST(request: Request) {
   try {
-    const session = await getTeamSession();
-    
-    // TODO: Add admin role check here
-    if (!session) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    await requireAdminSession();
 
     const { questionIds } = await request.json();
     

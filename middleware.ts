@@ -11,6 +11,10 @@ const ADMIN_COOKIE_NAME = "cipher_admin_token";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/leaderboard" && request.cookies.has("cipher_team_token")) {
+    return NextResponse.redirect(new URL("/team", request.url));
+  }
+
   // Only protect /admin routes (except /admin/login)
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     const adminToken = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
@@ -39,5 +43,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/leaderboard"],
 };

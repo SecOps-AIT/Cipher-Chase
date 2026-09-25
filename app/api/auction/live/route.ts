@@ -60,15 +60,14 @@ export async function GET(request: NextRequest) {
     // Get team's current bid for this auction
     const teamBid = liveAuction.bids.find(bid => bid.teamId === teamAuth.teamId);
 
-    // Calculate bonus preview for different bid times
-    const { calculateBonus, formatTime } = await import("@/lib/round2-auction");
+    // NO BONUS CALCULATION - Just return admin-set points
+    const { formatTime } = await import("@/lib/round2-auction");
+    const points = liveAuction.points || 200;
     
-    const bonusPreview = (bidTimeSeconds: number) => {
-      const calc = calculateBonus(liveAuction.baseTimeSeconds, bidTimeSeconds, liveAuction.basePoints);
+    const bidPreview = (bidTimeSeconds: number) => {
       return {
         bidTime: formatTime(bidTimeSeconds),
-        potentialScore: calc.potentialScore,
-        failurePenalty: calc.failurePenalty
+        points: points // Fixed points, no bonus
       };
     };
 
@@ -83,18 +82,18 @@ export async function GET(request: NextRequest) {
         topic: liveAuction.topic,
         outline: liveAuction.outline,
         baseTimeSeconds: liveAuction.baseTimeSeconds,
-        basePoints: liveAuction.basePoints,
+        points: points, // Admin-set points
         displayedAt: liveAuction.displayedAt?.toISOString(),
         bidCount: liveAuction.bids.length,
         lowestBid: lowestBid ? {
           teamName: lowestBid.team.name,
           bidTimeSeconds: lowestBid.bidTimeSeconds,
-          ...bonusPreview(lowestBid.bidTimeSeconds)
+          ...bidPreview(lowestBid.bidTimeSeconds)
         } : null,
         teamBid: teamBid ? {
           bidTimeSeconds: teamBid.bidTimeSeconds,
           submittedAt: teamBid.submittedAt.toISOString(),
-          ...bonusPreview(teamBid.bidTimeSeconds)
+          ...bidPreview(teamBid.bidTimeSeconds)
         } : null
       }
     });

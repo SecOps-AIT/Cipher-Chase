@@ -24,7 +24,7 @@ export interface QuestionPerformance {
   questionTitle: string;
   topic: string;
   baseTime: number;
-  basePoints: number;
+  points: number; // Admin-set points (no bonus)
   totalAssignments: number;
   completed: number;
   failed: number;
@@ -67,7 +67,7 @@ export async function getTeamScoringStats(roundId: string): Promise<TeamScoringS
       auctionQuestion: {
         select: {
           baseTimeSeconds: true,
-          basePoints: true
+          points: true // Admin-set points
         }
       }
     }
@@ -113,11 +113,8 @@ export async function getTeamScoringStats(roundId: string): Promise<TeamScoringS
     const reductionPercentage = (timeReduction / assignment.auctionQuestion.baseTimeSeconds) * 100;
     stats.avgTimeReductionPercentage += reductionPercentage;
 
-    // Calculate bonus percentage (for completed assignments)
-    if (assignment.status === "COMPLETED") {
-      const bonusPercentage = (assignment.bonusPoints / assignment.auctionQuestion.basePoints) * 100;
-      stats.avgBonusPercentage += bonusPercentage;
-    }
+    // NO BONUS PERCENTAGE CALCULATION (bonus system removed)
+    // Points are now fixed per question
   }
 
   // Calculate averages and net scores
@@ -127,12 +124,8 @@ export async function getTeamScoringStats(roundId: string): Promise<TeamScoringS
     stats.successRate = stats.totalAssignments > 0 
       ? (stats.completed / stats.totalAssignments) * 100 
       : 0;
-    stats.avgTimeReductionPercentage = stats.totalAssignments > 0
-      ? stats.avgTimeReductionPercentage / stats.totalAssignments
-      : 0;
-    stats.avgBonusPercentage = stats.completed > 0
-      ? stats.avgBonusPercentage / stats.completed
-      : 0;
+    stats.avgTimeReductionPercentage = 0; // No longer relevant
+    stats.avgBonusPercentage = 0; // No longer relevant
     
     results.push(stats);
   }
@@ -189,7 +182,7 @@ export async function getQuestionPerformance(roundId: string): Promise<QuestionP
       questionTitle: aq.title,
       topic: aq.topic,
       baseTime: aq.baseTimeSeconds,
-      basePoints: aq.basePoints,
+      points: aq.points, // Admin-set points
       totalAssignments: aq.assignments.length,
       completed: completed.length,
       failed: failed.length,

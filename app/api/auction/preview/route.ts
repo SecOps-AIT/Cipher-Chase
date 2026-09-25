@@ -1,9 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { previewBonusCalculation } from "@/lib/round2-auction";
 import { validateTeamAuth } from "@/lib/auth";
 
+/**
+ * DEPRECATED: This endpoint is no longer needed as bonus calculations have been removed.
+ * Points are now fixed per question as set by admin.
+ * Kept for backward compatibility but returns simple fixed points.
+ */
 export async function POST(request: NextRequest) {
   try {
     const teamAuth = await validateTeamAuth(request);
@@ -12,37 +16,27 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { baseTimeSeconds, bidTimeSeconds, basePoints } = body;
+    const { points } = body;
 
-    if (!baseTimeSeconds || !bidTimeSeconds || !basePoints) {
+    if (!points || points <= 0) {
       return NextResponse.json(
-        { error: "Base time, bid time, and base points are required" },
+        { error: "Points must be provided and positive" },
         { status: 400 }
       );
     }
 
-    if (bidTimeSeconds <= 0 || baseTimeSeconds <= 0 || basePoints <= 0) {
-      return NextResponse.json(
-        { error: "All values must be positive" },
-        { status: 400 }
-      );
-    }
-
-    if (bidTimeSeconds > baseTimeSeconds) {
-      return NextResponse.json(
-        { error: "Bid time cannot exceed base time" },
-        { status: 400 }
-      );
-    }
-
-    const preview = previewBonusCalculation(baseTimeSeconds, bidTimeSeconds, basePoints);
-
+    // NO BONUS CALCULATION - Just return the admin-set points
     return NextResponse.json({
       success: true,
-      preview
+      preview: {
+        points: points,
+        potentialScore: points,
+        successMessage: `SUCCESS: +${points} pts`,
+        failureMessage: `FAILURE: No points awarded`
+      }
     });
   } catch (error: any) {
-    console.error("Preview bonus calculation error:", error);
+    console.error("Preview error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

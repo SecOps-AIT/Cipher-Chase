@@ -17,12 +17,14 @@ export async function POST(req: Request) {
     }
 
     const { email, password } = result.data;
-    const adminEmail = process.env.ADMIN_EMAIL || "admin@cipherchase.local";
-    const adminPassword = process.env.ADMIN_PASSWORD || "cipher-admin-secret-2026";
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
 
-    const validPasswords = [adminPassword, "cipher-2026", "cipher-admin-secret-2026"];
+    if (!adminEmail || !adminPassword) {
+      return NextResponse.json({ error: "Admin authentication is not configured." }, { status: 503 });
+    }
 
-    if (email !== adminEmail || !validPasswords.includes(password)) {
+    if (email !== adminEmail || password !== adminPassword) {
       return NextResponse.json(
         { error: "Invalid admin email or password" },
         { status: 401 }

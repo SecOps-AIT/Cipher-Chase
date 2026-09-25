@@ -69,6 +69,13 @@ export async function GET(
       );
     }
 
+    if (assignment.status === "READY") {
+      return NextResponse.json(
+        { error: "Start the assignment timer before opening the question." },
+        { status: 409 }
+      );
+    }
+
     // Get timer status
     const { getTimerStatus } = await import("@/lib/round2-timer");
     const timerResult = await getTimerStatus(assignmentId, teamAuth.teamId);
@@ -119,7 +126,7 @@ export async function GET(
         id: assignment.id,
         status: assignment.status,
         winningBidSeconds: assignment.winningBidSeconds,
-        bonusPoints: assignment.bonusPoints,
+        points: assignment.auctionQuestion.points, // Admin-set points (no bonus)
         completedAt: assignment.completedAt?.toISOString() || null,
         failedAt: assignment.failedAt?.toISOString() || null,
         finalScoreChange: assignment.finalScoreChange
@@ -127,7 +134,8 @@ export async function GET(
       auctionQuestion: {
         title: assignment.auctionQuestion.title,
         topic: assignment.auctionQuestion.topic,
-        basePoints: assignment.auctionQuestion.basePoints,
+        points: assignment.auctionQuestion.points, // Admin-set points
+        hintPenalty: assignment.auctionQuestion.hintPenalty, // Admin-set hint penalty
         baseTimeSeconds: assignment.auctionQuestion.baseTimeSeconds
       },
       question: {

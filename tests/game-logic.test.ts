@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateSpeedBonus } from "../lib/round2";
+import { calculateBonus } from "../lib/round2-auction";
 
 describe("Cipher Chase Game Engine Logic", () => {
   describe("Round 1 — Question Release & Validity Windows", () => {
@@ -89,33 +89,27 @@ describe("Cipher Chase Game Engine Logic", () => {
     });
   });
 
-  describe("Round 2 — Cyber Auction Speed Bonuses", () => {
-    it("awards +100 for <= 25% of committed time used", () => {
-      const committedSeconds = 480; // 8 minutes
-      const timeUsed = 100; // ~20.8% of time
-      const result = calculateSpeedBonus(timeUsed, committedSeconds);
-      expect(result.bonus).toBe(100);
+  describe("Round 2 — Auction Bid Scoring", () => {
+    it("awards one bonus point per second bid below the base time", () => {
+      const result = calculateBonus(480, 380, 200);
+      expect(result.bonusPoints).toBe(100);
+      expect(result.potentialScore).toBe(300);
     });
 
-    it("awards +75 for <= 50% of committed time used", () => {
-      const committedSeconds = 480;
-      const timeUsed = 240; // exactly 50%
-      const result = calculateSpeedBonus(timeUsed, committedSeconds);
-      expect(result.bonus).toBe(75);
+    it("awards no time bonus when the bid equals the base time", () => {
+      const result = calculateBonus(480, 480, 200);
+      expect(result.bonusPoints).toBe(0);
+      expect(result.potentialScore).toBe(200);
     });
 
-    it("awards +50 for <= 75% of committed time used", () => {
-      const committedSeconds = 480;
-      const timeUsed = 320; // ~66.7%
-      const result = calculateSpeedBonus(timeUsed, committedSeconds);
-      expect(result.bonus).toBe(50);
+    it("does not award a time bonus when the bid exceeds the base time", () => {
+      const result = calculateBonus(480, 500, 200);
+      expect(result.bonusPoints).toBe(0);
     });
 
-    it("awards +25 for > 75% of committed time used", () => {
-      const committedSeconds = 480;
-      const timeUsed = 450; // > 75%
-      const result = calculateSpeedBonus(timeUsed, committedSeconds);
-      expect(result.bonus).toBe(25);
+    it("uses the negative time reduction as the failure penalty", () => {
+      const result = calculateBonus(480, 380, 200);
+      expect(result.failurePenalty).toBe(-100);
     });
   });
 

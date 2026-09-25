@@ -46,7 +46,7 @@ describe('Hint System', () => {
         joinCode: 'TEST123',
         score: 100, // Start with 100 score points
         qualified: false,
-        round1Duration: 1800
+        round1Duration: 1200
       }
     });
 

@@ -1,19 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getTeamSession } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/audit";
 
 // GET current Round 1 duration configuration
 export async function GET() {
   try {
-    const session = await getTeamSession();
-    
-    // TODO: Add admin role check here
-    if (!session) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    await requireAdminSession();
 
     // Get current default duration from a team (they should all have the same default)
     const sampleTeam = await prisma.team.findFirst({
@@ -21,7 +16,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      defaultDuration: sampleTeam?.round1Duration || 1800, // 30 minutes default
+      defaultDuration: sampleTeam?.round1Duration || 1200, // 20 minutes default
     });
   } catch (err: any) {
     console.error("Error fetching Round 1 duration:", err);
@@ -32,12 +27,7 @@ export async function GET() {
 // PUT update Round 1 duration configuration
 export async function PUT(request: Request) {
   try {
-    const session = await getTeamSession();
-    
-    // TODO: Add admin role check here
-    if (!session) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    await requireAdminSession();
 
     const { duration } = await request.json();
     

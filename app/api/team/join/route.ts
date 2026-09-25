@@ -2,45 +2,75 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { TeamJoinSchema } from "@/lib/validation";
 import { setTeamSessionCookie } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { getNextCC26Code } from "@/lib/teams";
 
+/**
+ * POST /api/team/join
+ * 
+ * Two modes:
+ * 1. Leader registers team with all members upfront (teamName + members array)
+ * 2. Member accesses existing team using join code (joinCode + memberName)
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    // Accept either joinCode (legacy) or teamName + memberName
-    const { teamName, memberName, joinCode, phone, email, isLeader } = body;
-    const cleanMemberName = memberName?.trim();
-    const cleanTeamName = teamName?.trim();
-    const cleanPhone = phone?.trim();
-    const cleanEmail = email?.trim();
+    // NEW FLOW: Leader registers all members upfront
+    // OR legacy flow: Member joins with code
+    const { teamName, members, joinCode, memberName } = body;
 
-    if (!cleanMemberName || (!cleanTeamName && !joinCode)) {
-      return NextResponse.json(
-        { error: "Member name and team name are required." },
-        { status: 400 }
-      );
-    }
+    // --- MODE 1: LEADER REGISTERS TEAM WITH ALL MEMBERS UPFRONT ---
+    if (teamName && Array.isArray(members) && members.length > 0) {
+      const cleanTeamName = teamName.trim();
+      
+      if (!cleanTeamName) {
+        return NextResponse.json(
+          { error: "Team name is required." },
+          { status: 400 }
+        );
+      }
 
-    // If creating team (isLeader=true), require phone and email
-    if (isLeader && (!cleanPhone || !cleanEmail)) {
-      return NextResponse.json(
-        { error: "Phone and email are required for team leaders." },
-        { status: 400 }
-      );
-    }
+      if (members.length > 3) {
+        return NextResponse.json(
+          { error: "Maximum 3 members allowed per team." },
+          { status: 400 }
+        );
+      }
 
-    // 1. Find or create team
-    let team = joinCode 
-      ? await prisma.team.findFirst({ where: { joinCode }, include: { event: true } })
-      : await prisma.team.findFirst({ where: { name: cleanTeamName }, include: { event: true } });
+      // Validate leader (first member)
+      const leader = members[0];
+      if (!leader.name?.trim()) {
+        return NextResponse.json(
+          { error: "Leader name is required." },
+          { status: 400 }
+        );
+      }
+      if (!leader.phone?.trim()) {
+        return NextResponse.json(
+          { error: "Leader phone number is required." },
+          { status: 400 }
+        );
+      }
+      if (!leader.email?.trim()) {
+        return NextResponse.json(
+          { error: "Leader email address is required." },
+          { status: 400 }
+        );
+      }
 
-    // If no team found and teamName provided, create new team
-    if (!team && cleanTeamName) {
-      // Get active event (status: LIVE)
+      // Validate all member names are provided
+      for (const member of members) {
+        if (!member.name?.trim()) {
+          return NextResponse.json(
+            { error: "All member names must be provided." },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Get active event
       const activeEvent = await prisma.event.findFirst({
         where: { status: "LIVE" },
       });
@@ -52,128 +82,161 @@ export async function POST(req: Request) {
         );
       }
 
+      // Generate team code
       const generatedCode = await getNextCC26Code();
 
-      team = await prisma.team.create({
-        data: {
-          name: cleanTeamName,
-          joinCode: generatedCode,
-          eventId: activeEvent.id,
-          score: 0,
-          qualified: false,
-        },
-        include: { event: true },
+      // Create team and all members in a transaction
+      const result = await prisma.$transaction(async (tx) => {
+        // Create team
+        const team = await tx.team.create({
+          data: {
+            name: cleanTeamName,
+            joinCode: generatedCode,
+            eventId: activeEvent.id,
+            score: 0,
+            qualified: false,
+          },
+        });
+
+        // Create all members
+        const createdMembers = [];
+        for (const member of members) {
+          const created = await tx.teamMember.create({
+            data: {
+              teamId: team.id,
+              name: member.name.trim(),
+              phone: member.phone?.trim() || null,
+              email: member.email?.trim() || null,
+              isLeader: member.isLeader || false,
+            },
+          });
+          createdMembers.push(created);
+        }
+
+        return { team, members: createdMembers };
+      });
+
+      // Set session cookie for the leader (first member)
+      const leaderMember = result.members[0];
+      await setTeamSessionCookie({
+        teamId: result.team.id,
+        memberId: leaderMember.id,
+        memberName: leaderMember.name,
+        eventId: activeEvent.id,
+        teamName: result.team.name,
+        joinCode: result.team.joinCode,
       });
 
       await logAuditEvent({
         eventId: activeEvent.id,
-        teamId: team.id,
+        teamId: result.team.id,
         actor: "TEAM",
         action: "TEAM_CREATED",
-        details: `Team "${cleanTeamName}" created by ${cleanMemberName}.`,
+        details: `Team "${cleanTeamName}" created by ${leaderMember.name} with ${result.members.length} members registered upfront.`,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Team registered successfully with all members.",
+        team: {
+          id: result.team.id,
+          name: result.team.name,
+          joinCode: result.team.joinCode,
+          score: result.team.score,
+          qualified: result.team.qualified,
+          memberCount: result.members.length,
+          maxMembers: 3,
+          members: result.members.map(m => m.name),
+          currentMember: leaderMember.name,
+        },
       });
     }
 
-    if (!team) {
-      return NextResponse.json(
-        { error: "Invalid join code. Please check with your team captain or admin." },
-        { status: 404 }
-      );
-    }
+    // --- MODE 2: MEMBER ACCESSES EXISTING TEAM WITH JOIN CODE ---
+    if (joinCode && memberName) {
+      const cleanMemberName = memberName.trim();
+      const cleanJoinCode = joinCode.trim().toUpperCase();
 
-    // 2. Perform atomic capacity check and member creation inside transaction
-    const joinResult = await prisma.$transaction(async (tx) => {
-      // Fetch fresh member list inside transaction to avoid race conditions
-      const currentMembers = await tx.teamMember.findMany({
-        where: { teamId: team.id },
-      });
-
-      // Check if this member is reconnecting (existing member name)
-      const existingMember = currentMembers.find(
-        (m) => m.name.toLowerCase() === cleanMemberName.toLowerCase()
-      );
-
-      let activeMemberId: string;
-      let memberList = currentMembers;
-
-      if (existingMember) {
-        // Reconnecting existing member — does NOT consume another slot!
-        activeMemberId = existingMember.id;
-      } else {
-        // Enforce maximum 3 members capacity server-side
-        if (currentMembers.length >= 3) {
-          throw new Error("TEAM_FULL");
-        }
-
-        const newMember = await tx.teamMember.create({
-          data: {
-            teamId: team.id,
-            name: cleanMemberName,
-            phone: cleanPhone || null,
-            email: cleanEmail || null,
-            isLeader: isLeader || false,
-          },
-        });
-        activeMemberId = newMember.id;
-        memberList = [...currentMembers, newMember];
+      if (!cleanMemberName) {
+        return NextResponse.json(
+          { error: "Member name is required." },
+          { status: 400 }
+        );
       }
 
-      return {
-        memberId: activeMemberId,
-        isReconnect: !!existingMember,
-        memberList,
-      };
-    });
+      // Find team by join code
+      const team = await prisma.team.findFirst({
+        where: { joinCode: cleanJoinCode },
+        include: { event: true, members: true },
+      });
 
-    // 3. Set signed HTTP-only member session cookie
-    await setTeamSessionCookie({
-      teamId: team.id,
-      memberId: joinResult.memberId,
-      memberName: cleanMemberName,
-      eventId: team.eventId,
-      teamName: team.name,
-      joinCode: team.joinCode,
-    });
+      if (!team) {
+        return NextResponse.json(
+          { error: "Invalid join code. Please check with your team leader." },
+          { status: 404 }
+        );
+      }
 
-    await logAuditEvent({
-      eventId: team.eventId,
-      teamId: team.id,
-      actor: "TEAM",
-      action: joinResult.isReconnect ? "MEMBER_RECONNECTED" : "MEMBER_JOINED",
-      details: `${cleanMemberName} ${
-        joinResult.isReconnect ? "reconnected to" : "joined"
-      } "${team.name}" (${joinResult.memberList.length}/3 members).`,
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: joinResult.isReconnect
-        ? "Welcome back! Reconnected to team session."
-        : "You joined successfully.",
-      team: {
-        id: team.id,
-        name: team.name,
-        joinCode: team.joinCode,
-        score: team.score,
-        qualified: team.qualified,
-        memberCount: joinResult.memberList.length,
-        maxMembers: 3,
-        members: joinResult.memberList.map((m) => m.name),
-        currentMember: cleanMemberName,
-      },
-    });
-  } catch (err: any) {
-    if (err.message === "TEAM_FULL") {
-      return NextResponse.json(
-        {
-          error: "TEAM FULL: This team already has 3 members. Maximum 3 members allowed per team.",
-          code: "TEAM_FULL",
-        },
-        { status: 400 }
+      // Find existing member by name (case-insensitive)
+      const existingMember = team.members.find(
+        m => m.name.toLowerCase() === cleanMemberName.toLowerCase()
       );
+
+      if (!existingMember) {
+        return NextResponse.json(
+          {
+            error: "Member not registered. The team leader must register all members upfront. Contact your team leader.",
+            code: "MEMBER_NOT_REGISTERED"
+          },
+          { status: 403 }
+        );
+      }
+
+      // Set session cookie for the member
+      await setTeamSessionCookie({
+        teamId: team.id,
+        memberId: existingMember.id,
+        memberName: existingMember.name,
+        eventId: team.eventId,
+        teamName: team.name,
+        joinCode: team.joinCode,
+      });
+
+      await logAuditEvent({
+        eventId: team.eventId,
+        teamId: team.id,
+        actor: "TEAM",
+        action: "MEMBER_LOGGED_IN",
+        details: `${existingMember.name} accessed team "${team.name}" using join code.`,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Access granted. Welcome to your team!",
+        team: {
+          id: team.id,
+          name: team.name,
+          joinCode: team.joinCode,
+          score: team.score,
+          qualified: team.qualified,
+          memberCount: team.members.length,
+          maxMembers: 3,
+          members: team.members.map(m => m.name),
+          currentMember: existingMember.name,
+        },
+      });
     }
+
+    // Invalid request
     return NextResponse.json(
-      { error: err.message || "Failed to join team" },
+      { error: "Invalid request. Provide either (teamName + members) or (joinCode + memberName)." },
+      { status: 400 }
+    );
+
+  } catch (err: any) {
+    console.error("Team join error:", err);
+    return NextResponse.json(
+      { error: err.message || "Failed to process request" },
       { status: 500 }
     );
   }

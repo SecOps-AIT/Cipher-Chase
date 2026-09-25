@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "@jest/globals";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { prisma } from "../lib/prisma";
 import {
   createAuctionQuestion,

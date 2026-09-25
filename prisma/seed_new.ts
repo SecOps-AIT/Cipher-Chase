@@ -67,7 +67,7 @@ async function main() {
         joinCode: t.joinCode,
         score: 0,
         qualified: false,
-        round1Duration: 1800, // 30 minutes default
+        round1Duration: 1200, // 20 minutes default
         members: {
           create: t.members,
         },

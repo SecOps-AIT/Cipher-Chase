@@ -58,7 +58,13 @@ ADMIN_PASSWORD="cipher-admin-secret-2026"
 # Optional: Supabase Realtime (for live updates)
 NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-public-key"
+SUPABASE_SERVICE_ROLE_KEY="your-server-only-service-role-key"
+SUPABASE_STORAGE_BUCKET="question-attachments"
 ```
+
+Create a public Supabase Storage bucket named `question-attachments` (or set
+`SUPABASE_STORAGE_BUCKET` to another bucket). The service role key is used only
+by the admin upload API; never expose it with a `NEXT_PUBLIC_` prefix.
 
 ---
 

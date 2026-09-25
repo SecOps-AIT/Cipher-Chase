@@ -1,17 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getTeamSession } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth";
 import { getRound1TimerStats } from "@/lib/round1";
 
 export async function GET() {
   try {
-    const session = await getTeamSession();
-    
-    // TODO: Add admin role check here
-    if (!session) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
+    await requireAdminSession();
 
     const stats = await getRound1TimerStats();
     

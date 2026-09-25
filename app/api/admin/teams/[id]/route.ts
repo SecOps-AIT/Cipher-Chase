@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/auth";
 import { regenerateTeamJoinCode } from "@/lib/teams";
 import { logAuditEvent } from "@/lib/audit";
+import { logActivity, ActivityActions } from "@/lib/activity";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
@@ -109,7 +110,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const team = await prisma.team.findUnique({ where: { id: params.id } });
     if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
@@ -120,6 +121,13 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
       actor: "ADMIN",
       action: "TEAM_DELETED",
       details: `Team "${team.name}" was deleted.`,
+    });
+
+    await logActivity({
+      action: ActivityActions.TEAM_DELETED,
+      performedBy: session.email,
+      details: `Deleted team "${team.name}"`,
+      metadata: { teamName: team.name, joinCode: team.joinCode }
     });
 
     return NextResponse.json({ success: true, message: "Team deleted" });

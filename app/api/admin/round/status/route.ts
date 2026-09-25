@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
+import { logActivity, ActivityActions } from "@/lib/activity";
 
 export async function GET(req: Request) {
   try {
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const body = await req.json();
     const { roundId, status } = body;
 
@@ -114,6 +115,13 @@ export async function POST(req: Request) {
       actor: "ADMIN",
       action: `ROUND_${status}`,
       details: `Round "${round.name}" status changed from ${round.status} to ${status}`,
+    });
+
+    await logActivity({
+      action: ActivityActions.ROUND_STATUS_CHANGED,
+      performedBy: session.email,
+      details: `Round "${round.name}" changed from ${round.status} to ${status}`,
+      metadata: { roundId: round.id, roundName: round.name, previousStatus: round.status, newStatus: status }
     });
 
     return NextResponse.json({ success: true, round: updated });

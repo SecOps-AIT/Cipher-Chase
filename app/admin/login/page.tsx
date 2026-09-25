@@ -7,8 +7,8 @@ import { Shield, Lock, Mail, ArrowLeft, ArrowRight, AlertCircle } from "lucide-r
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@cipherchase.local");
-  const [password, setPassword] = useState("cipher-2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +76,7 @@ export default function AdminLoginPage() {
               </div>
               <input
                 type="email"
+                autoComplete="off"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -94,6 +95,7 @@ export default function AdminLoginPage() {
               </div>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

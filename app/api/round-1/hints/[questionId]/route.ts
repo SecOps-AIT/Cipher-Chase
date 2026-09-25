@@ -2,19 +2,26 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { requireTeamSession } from "@/lib/auth";
-import { getQuestionHintData, claimQuestionHint } from "@/lib/round1";
 
-// GET /api/round-1/hints/[questionId] - Get hint data for a question
+/**
+ * AUTOMATIC HINT SYSTEM DISABLED
+ * 
+ * As per game specification, there is NO automatic hint system in the portal.
+ * Hints are now manually recorded by admins with a -5 point penalty.
+ * 
+ * Teams should contact admins/organizers directly for hints during the competition.
+ */
+
+// GET /api/round-1/hints/[questionId] - DISABLED
 export async function GET(_req: Request, { params }: { params: { questionId: string } }) {
   try {
-    const teamSession = await requireTeamSession();
+    await requireTeamSession();
     
-    const hintData = await getQuestionHintData(params.questionId, teamSession.teamId);
-    if (!hintData) {
-      return NextResponse.json({ error: "Question not found or no hints available" }, { status: 404 });
-    }
-
-    return NextResponse.json(hintData);
+    return NextResponse.json({
+      error: "Automatic hint system is disabled",
+      message: "Hints are manually provided by admins. Contact the organizers for assistance. Each hint costs -5 points."
+    }, { status: 410 }); // 410 Gone - resource no longer available
+    
   } catch (err: any) {
     if (err.message === "UNAUTHORIZED_TEAM") {
       return NextResponse.json({ error: "Unauthorized: Team session required" }, { status: 403 });
@@ -26,29 +33,16 @@ export async function GET(_req: Request, { params }: { params: { questionId: str
   }
 }
 
-// POST /api/round-1/hints/[questionId] - Claim a hint
+// POST /api/round-1/hints/[questionId] - DISABLED
 export async function POST(req: Request, { params }: { params: { questionId: string } }) {
   try {
-    const teamSession = await requireTeamSession();
-    const body = await req.json();
-    const { hintId } = body;
-
-    if (!hintId) {
-      return NextResponse.json({ error: "Missing hintId" }, { status: 400 });
-    }
-
-    const result = await claimQuestionHint(hintId, teamSession.teamId);
+    await requireTeamSession();
     
-    if (!result.success) {
-      return NextResponse.json({ error: result.message }, { status: 400 });
-    }
-
     return NextResponse.json({
-      success: true,
-      message: result.message,
-      hint: result.hint,
-      remainingScore: result.remainingScore
-    });
+      error: "Automatic hint system is disabled",
+      message: "Hints are manually provided by admins. Contact the organizers for assistance. Each hint costs -5 points."
+    }, { status: 410 }); // 410 Gone - resource no longer available
+    
   } catch (err: any) {
     if (err.message === "UNAUTHORIZED_TEAM") {
       return NextResponse.json({ error: "Unauthorized: Team session required" }, { status: 403 });

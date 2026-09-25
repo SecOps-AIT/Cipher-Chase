@@ -12,7 +12,8 @@ export interface AuctionQuestionView {
   topic: string;
   outline: string;
   baseTimeSeconds: number;
-  basePoints: number;
+  points: number; // Admin-set points, no time bonus
+  hintPenalty: number; // Admin-set hint penalty (e.g., -10, -15, -20)
   status: "DRAFT" | "OPEN" | "CLOSED" | "SOLD";
   displayedAt: string | null;
   auctionClosedAt: string | null;
@@ -35,19 +36,11 @@ export interface TeamChallengeView {
   status: "READY" | "ACTIVE" | "COMPLETED" | "FAILED";
   startedAt: string | null;
   deadlineAt: string | null;
-  bonusPoints: number;
-  potentialScore: number;
-  failurePenalty: number;
+  points: number; // Admin-set points (no bonus)
+  potentialScore: number; // Same as points in new rules
+  failurePenalty: number; // Always 0 in new rules
 }
 
-export interface BonusCalculation {
-  baseTime: number;
-  bidTime: number;
-  timeReduction: number;
-  bonusPoints: number;
-  potentialScore: number;
-  failurePenalty: number;
-}
 
 // ============================================================
 // AUCTION MANAGEMENT FUNCTIONS
@@ -63,8 +56,8 @@ export async function createAuctionQuestion({
   topic,
   outline,
   baseTimeSeconds,
-  basePoints,
-  bonusFormula
+  points,
+  hintPenalty
 }: {
   roundId: string;
   questionId: string;
@@ -72,8 +65,8 @@ export async function createAuctionQuestion({
   topic: string;
   outline: string;
   baseTimeSeconds: number;
-  basePoints: number;
-  bonusFormula?: string;
+  points: number;
+  hintPenalty?: number;
 }): Promise<{ success: boolean; message: string; auctionQuestion?: AuctionQuestionView }> {
   try {
     // Verify the question exists and belongs to the round
@@ -103,8 +96,8 @@ export async function createAuctionQuestion({
         topic,
         outline,
         baseTimeSeconds,
-        basePoints,
-        bonusFormula,
+        points,
+        hintPenalty: hintPenalty || -10, // Default -10 if not provided
         status: "DRAFT"
       }
     });
@@ -114,7 +107,7 @@ export async function createAuctionQuestion({
       eventId: question.round.eventId,
       actor: "ADMIN",
       action: "AUCTION_QUESTION_CREATED",
-      details: `Created auction question "${title}" (${formatTime(baseTimeSeconds)}, ${basePoints} pts)`
+      details: `Created auction question "${title}" (${formatTime(baseTimeSeconds)}, ${points} pts)`
     });
 
     return {
@@ -127,7 +120,8 @@ export async function createAuctionQuestion({
         topic: auctionQuestion.topic,
         outline: auctionQuestion.outline,
         baseTimeSeconds: auctionQuestion.baseTimeSeconds,
-        basePoints: auctionQuestion.basePoints,
+        points: auctionQuestion.points,
+        hintPenalty: auctionQuestion.hintPenalty,
         status: auctionQuestion.status as any,
         displayedAt: auctionQuestion.displayedAt?.toISOString() || null,
         auctionClosedAt: auctionQuestion.auctionClosedAt?.toISOString() || null
@@ -196,7 +190,8 @@ export async function openAuction(auctionQuestionId: string): Promise<{
         topic: updated.topic,
         outline: updated.outline,
         baseTimeSeconds: updated.baseTimeSeconds,
-        basePoints: updated.basePoints,
+        points: updated.points, // Admin-set points
+        hintPenalty: updated.hintPenalty, // Admin-set hint penalty
         status: updated.status as any,
         displayedAt: updated.displayedAt?.toISOString() || null,
         auctionClosedAt: updated.auctionClosedAt?.toISOString() || null
@@ -512,8 +507,8 @@ export async function settleAuction({
       data: { status: "SOLD" }
     });
 
-    // Calculate bonus points
-    const bonusCalc = calculateBonus(auctionQuestion.baseTimeSeconds, winningBidSeconds, auctionQuestion.basePoints);
+    // NO BONUS CALCULATION - Admin-set points only
+    // The points are set by admin in auctionQuestion.points field
 
     // Create team challenge assignment
     const assignment = await tx.teamChallengeAssignment.create({
@@ -522,8 +517,7 @@ export async function settleAuction({
         auctionQuestionId,
         winningBidSeconds,
         status: "READY",
-        bonusPoints: bonusCalc.bonusPoints,
-        finalScoreChange: 0
+        finalScoreChange: 0 // Will be set to auctionQuestion.points when solved (minus any hint penalties)
       }
     });
 
@@ -533,7 +527,7 @@ export async function settleAuction({
       teamId: winningTeamId,
       actor: "ADMIN",
       action: "AUCTION_SETTLED",
-      details: `Question "${auctionQuestion.title}" sold to team "${team.name}" for ${formatTime(winningBidSeconds)} (potential: +${bonusCalc.potentialScore}, risk: ${bonusCalc.failurePenalty})`
+      details: `Question "${auctionQuestion.title}" sold to team "${team.name}" for ${formatTime(winningBidSeconds)} (potential: +${auctionQuestion.points} pts)`
     });
 
     return {
@@ -551,48 +545,9 @@ export async function settleAuction({
 }
 
 // ============================================================
-// BONUS CALCULATION FUNCTIONS
+// REMOVED: BONUS CALCULATION (NO TIME BONUS IN NEW RULES)
+// Points are now fixed per question as set by admin
 // ============================================================
-
-/**
- * Calculate time bonus based on bid vs base time
- * User rule: +1 point for every second reduced below base time, -X penalty if not solved
- */
-export function calculateBonus(baseTimeSeconds: number, bidTimeSeconds: number, basePoints: number): BonusCalculation {
-  const timeReduction = Math.max(0, baseTimeSeconds - bidTimeSeconds);
-  
-  // Bonus formula: +1 point for every second reduced below base time
-  const bonusPoints = timeReduction;
-  const potentialScore = basePoints + bonusPoints;
-  const failurePenalty = -timeReduction; // Negative of the time reduction
-
-  return {
-    baseTime: baseTimeSeconds,
-    bidTime: bidTimeSeconds,
-    timeReduction,
-    bonusPoints,
-    potentialScore,
-    failurePenalty
-  };
-}
-
-/**
- * Preview bonus calculation for UI display
- */
-export function previewBonusCalculation(baseTimeSeconds: number, bidTimeSeconds: number, basePoints: number) {
-  const calc = calculateBonus(baseTimeSeconds, bidTimeSeconds, basePoints);
-  
-  return {
-    baseTime: formatTime(calc.baseTime),
-    bidTime: formatTime(calc.bidTime),
-    timeReduction: formatTime(calc.timeReduction),
-    bonusPoints: calc.bonusPoints,
-    potentialScore: calc.potentialScore,
-    failurePenalty: calc.failurePenalty,
-    successMessage: `SUCCESS: +${calc.potentialScore}`,
-    failureMessage: `FAILURE: ${calc.failurePenalty}`
-  };
-}
 
 // ============================================================
 // TEAM QUERY FUNCTIONS
@@ -612,7 +567,7 @@ export async function getTeamActiveAssignments(teamId: string): Promise<TeamChal
         select: {
           title: true,
           topic: true,
-          basePoints: true,
+          points: true, // Admin-set points, no bonus
           baseTimeSeconds: true
         }
       }
@@ -621,11 +576,8 @@ export async function getTeamActiveAssignments(teamId: string): Promise<TeamChal
   });
 
   return assignments.map(assignment => {
-    const bonusCalc = calculateBonus(
-      assignment.auctionQuestion.baseTimeSeconds,
-      assignment.winningBidSeconds,
-      assignment.auctionQuestion.basePoints
-    );
+    // NO BONUS CALCULATION - Just return the admin-set points
+    const points = assignment.auctionQuestion.points;
 
     return {
       id: assignment.id,
@@ -636,9 +588,9 @@ export async function getTeamActiveAssignments(teamId: string): Promise<TeamChal
       status: assignment.status as any,
       startedAt: assignment.startedAt?.toISOString() || null,
       deadlineAt: assignment.deadlineAt?.toISOString() || null,
-      bonusPoints: assignment.bonusPoints,
-      potentialScore: bonusCalc.potentialScore,
-      failurePenalty: bonusCalc.failurePenalty
+      points: points, // Fixed points set by admin
+      potentialScore: points, // Same as points (no bonus)
+      failurePenalty: 0 // No penalty in new rules - admin just doesn't award points if failed
     };
   });
 }

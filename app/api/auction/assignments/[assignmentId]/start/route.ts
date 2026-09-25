@@ -1,46 +1,59 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { startQuestionTimer } from "@/lib/round2-timer";
 import { validateTeamAuth } from "@/lib/auth";
+import { startQuestionTimer } from "@/lib/round2-timer";
 
+/**
+ * POST /api/auction/assignments/:assignmentId/start
+ * 
+ * Start the timer for a Round 2 assignment (READY -> ACTIVE)
+ * 
+ * As per specification:
+ * "Timer does NOT start when admin sells question. 
+ *  Timer starts when FIRST MEMBER OF THE WINNING TEAM OPENS/ENTERS THE QUESTION"
+ * 
+ * This endpoint transitions the assignment from READY to ACTIVE status
+ * and sets startedAt and deadlineAt based on the winning bid time.
+ */
 export async function POST(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: { assignmentId: string } }
 ) {
   try {
-    const teamAuth = await validateTeamAuth(request);
-    if (!teamAuth.success || !teamAuth.teamId) {
-      return NextResponse.json({ error: teamAuth.error || "Authentication required" }, { status: 401 });
-    }
-
-    const { assignmentId } = params;
-
-    if (!assignmentId) {
+    const authResult = await validateTeamAuth(req);
+    if (!authResult.success || !authResult.teamId) {
       return NextResponse.json(
-        { error: "Assignment ID is required" },
-        { status: 400 }
+        { error: authResult.error || "Unauthorized" },
+        { status: 401 }
       );
     }
 
+    const { assignmentId } = params;
+    const teamId = authResult.teamId!;
+
     const result = await startQuestionTimer({
       assignmentId,
-      teamId: teamAuth.teamId
+      teamId,
     });
 
     if (!result.success) {
-      return NextResponse.json({ error: result.message }, { status: 400 });
+      return NextResponse.json(
+        { error: result.message },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({
       success: true,
       message: result.message,
-      assignment: result.assignment
+      assignment: result.assignment,
     });
+
   } catch (error: any) {
-    console.error("Start question timer error:", error);
+    console.error("Error starting assignment timer:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to start timer" },
       { status: 500 }
     );
   }

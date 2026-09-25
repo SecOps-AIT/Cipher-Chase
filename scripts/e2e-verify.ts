@@ -86,18 +86,12 @@ async function runE2E() {
   }
   console.log("   ✓ All 20 Round 1 questions are 100% UNLOCKED (status: LIVE)");
 
-  // 5. Test Live Auction Settlement & Formula
-  console.log("\n5. Round 2 Live Auction Settlement & Scoring Logic:");
-  const { calculateBonus, settleAuction } = await import("../lib/round2-auction");
+  // 5. Test Live Auction Settlement (bonus calculation removed)
+  console.log("\n5. Round 2 Live Auction Settlement:");
+  const { settleAuction } = await import("../lib/round2-auction");
 
-  // Formula Check:
-  // Base 300s, Bid 240s -> Reduction 60s -> Bonus +60, Penalty -60
-  const bonusTest = calculateBonus(300, 240, 250);
-  console.log("   - Formula Test (Base: 300s, Bid: 240s, BasePts: 250):", bonusTest);
-  if (bonusTest.bonusPoints !== 60 || bonusTest.failurePenalty !== -60 || bonusTest.potentialScore !== 310) {
-    throw new Error("calculateBonus does not match +1 pt/s bonus and -X penalty!");
-  }
-  console.log("   ✓ Bonus formula correctly awards +1 pt per second reduced and -X penalty");
+  // Note: Bonus calculation has been removed. Questions now have fixed points only.
+  console.log("   ✓ Round 2 now uses fixed points (no time-based bonus)");
 
   // Pick a qualified team or qualify one
   let qualTeam = await prisma.team.findFirst({ where: { qualified: true } });

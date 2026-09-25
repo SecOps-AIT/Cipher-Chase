@@ -767,34 +767,6 @@ export default function TeamRound1Page() {
                   </p>
                 </div>
 
-                {/* LIVE SOLVERS MINI-LEADERBOARD */}
-                <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl font-mono text-xs space-y-2">
-                  <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase tracking-wider font-bold">
-                    <span>QUESTION SOLVERS ({selectedQuestion.solvesCount || selectedQuestion.recentSolves?.length || 0})</span>
-                    <span>TIME</span>
-                  </div>
-                  <div className="space-y-1 max-h-28 overflow-y-auto">
-                    {selectedQuestion.recentSolves && selectedQuestion.recentSolves.length > 0 ? (
-                      selectedQuestion.recentSolves.map((s, idx) => (
-                        <div
-                          key={idx}
-                          className="p-1.5 rounded flex items-center justify-between text-[11px] text-slate-300"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500">{idx + 1}.</span>
-                            <span>{s.teamName}</span>
-                          </div>
-                          <span className="text-slate-400 text-[10px]">
-                            {new Date(s.solvedAt).toLocaleTimeString()}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-[11px] text-slate-500 py-1 text-center">No solves yet. Be the first team!</p>
-                    )}
-                  </div>
-                </div>
-
                 {submitFeedback && (
                   <div
                     className={`p-3.5 rounded-xl border text-xs font-mono flex items-center gap-2.5 ${

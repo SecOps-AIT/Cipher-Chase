@@ -3,10 +3,11 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth";
 import { startAuctionChallenge } from "@/lib/round2";
+import { logActivity, ActivityActions } from "@/lib/activity";
 
 export async function POST(req: Request) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const body = await req.json();
     const { challengeId } = body;
 
@@ -15,6 +16,14 @@ export async function POST(req: Request) {
     }
 
     const updated = await startAuctionChallenge(challengeId);
+
+    await logActivity({
+      action: ActivityActions.AUCTION_STARTED,
+      performedBy: session.email,
+      details: `Started auction for challenge "${updated.title}"`,
+      metadata: { challengeId: updated.id, title: updated.title }
+    });
+
     return NextResponse.json({ success: true, challenge: updated });
   } catch (err: any) {
     if (err.message === "UNAUTHORIZED_ADMIN") {

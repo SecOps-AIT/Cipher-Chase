@@ -9,15 +9,16 @@ datasource db {
 }
 
 model Event {
-  id          String       @id @default(cuid())
-  name        String
-  status      String       @default("DRAFT")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  auditLogs   AuditLog[]
-  rounds      Round[]
-  scoreEvents ScoreEvent[]
-  teams       Team[]
+  id           String        @id @default(cuid())
+  name         String
+  status       String        @default("DRAFT")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  auditLogs    AuditLog[]
+  rounds       Round[]
+  scoreEvents  ScoreEvent[]
+  teams        Team[]
+  activityLogs ActivityLog[]
 }
 
 model Team {
@@ -31,6 +32,15 @@ model Team {
   round1StartedAt          DateTime?
   round1DeadlineAt         DateTime?
   round1Duration           Int                        @default(1800)
+  
+  // Manual hint tracking
+  manualHintsR1            Int                        @default(0)
+  manualHintsR2            Int                        @default(0)
+  hintPenaltyApplied       Int                        @default(0)
+  
+  // Leaderboard control
+  hideFromLeaderboard      Boolean                    @default(false)
+  
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
   hintClaims               HintClaim[]
@@ -42,6 +52,7 @@ model Team {
   auctionBids              AuctionBid[]
   auctionSales             AuctionSale[]
   challengeAssignments     TeamChallengeAssignment[]
+  activityLogs             ActivityLog[]
 
   @@unique([eventId, joinCode])
   @@unique([eventId, name])
@@ -84,25 +95,39 @@ model Round {
 }
 
 model Question {
-  id               String            @id @default(cuid())
-  roundId          String
-  title            String
-  description      String
-  answer           String
-  points           Int               @default(100)
-  difficulty       String            @default("MEDIUM")
-  category         String            @default("General")
-  answerMode       String            @default("TRIMMED")
-  isActive         Boolean           @default(true)
-  isCore           Boolean           @default(true)
-  isReleased       Boolean           @default(true)
-  order            Int               @default(0)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  round            Round             @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  submissions      Submission[]
-  hints            QuestionHint[]
-  auctionQuestions AuctionQuestion[]
+  id                   String                @id @default(cuid())
+  roundId              String
+  title                String
+  description          String
+  answer               String
+  points               Int                   @default(100)
+  difficulty           String                @default("MEDIUM")
+  category             String                @default("General")
+  answerMode           String                @default("TRIMMED")
+  
+  // External CTF integration
+  externalChallengeUrl String?
+  outline              String?
+  expectedFlag         String?
+  answerNormalization  String                @default("TRIM_UPPERCASE")
+  
+  // Round 2 full content
+  fullContent          String?
+  
+  // Admin fields
+  adminNotes           String?
+  
+  isActive             Boolean               @default(true)
+  isCore               Boolean               @default(true)
+  isReleased           Boolean               @default(true)
+  order                Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  round                Round                 @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  submissions          Submission[]
+  hints                QuestionHint[]
+  auctionQuestions     AuctionQuestion[]
+  attachments          QuestionAttachment[]
 
   @@index([roundId, isCore, order])
   @@index([roundId, isReleased])
@@ -129,6 +154,7 @@ model Submission {
   teamId          String
   questionId      String
   submittedAnswer String
+  normalizedAnswer String?
   isCorrect       Boolean
   submittedAt     DateTime @default(now())
   submittedBy     String?
@@ -143,22 +169,25 @@ model Submission {
 }
 
 model ScoreEvent {
-  id        String   @id @default(cuid())
-  eventId   String
-  teamId    String
-  roundId   String?
-  type      String
-  points    Int
-  reason    String
-  createdAt DateTime @default(now())
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  round     Round?   @relation(fields: [roundId], references: [id])
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  eventId    String
+  teamId     String
+  roundId    String?
+  questionId String?
+  type       String
+  points     Int
+  reason     String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  round      Round?   @relation(fields: [roundId], references: [id])
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([eventId, teamId])
   @@index([teamId, createdAt])
   @@index([eventId, createdAt])
   @@index([type])
+  @@index([questionId])
 }
 
 model AuctionChallenge {
@@ -246,6 +275,38 @@ model AuditLog {
   @@index([actor, action])
 }
 
+model QuestionAttachment {
+  id           String   @id @default(cuid())
+  questionId   String
+  filename     String
+  originalName String
+  mimeType     String
+  fileSize     Int
+  storageUrl   String
+  uploadedAt   DateTime @default(now())
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  eventId   String?
+  teamId    String?
+  memberId  String?
+  actor     String
+  action    String
+  target    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
+  @@index([teamId, createdAt])
+  @@index([action])
+}
+
 model AuctionQuestion {
   id               String                    @id @default(cuid())
   roundId          String
@@ -253,9 +314,10 @@ model AuctionQuestion {
   title            String
   topic            String
   outline          String
-  baseTimeSeconds  Int
-  basePoints       Int                       @default(200)
-  bonusFormula     String?
+  baseTimeSeconds  Int                       // Time for auction bidding display only, no scoring impact
+  points           Int                       @default(200) // Admin-set points (NO TIME BONUS)
+  hintPenalty      Int                       @default(-10) // Admin-set penalty per hint in Round 2 (e.g., -10, -15, -20)
+  hasAttachments   Boolean                   @default(false)
   status           String                    @default("DRAFT")
   displayedAt      DateTime?
   auctionClosedAt  DateTime?
@@ -301,14 +363,13 @@ model TeamChallengeAssignment {
   id                 String          @id @default(cuid())
   teamId             String
   auctionQuestionId  String
-  winningBidSeconds  Int
+  winningBidSeconds  Int             // Time they bid - for reference only, no scoring impact
   status             String          @default("READY")
   startedAt          DateTime?
   deadlineAt         DateTime?
   completedAt        DateTime?
   failedAt           DateTime?
-  bonusPoints        Int             @default(0)
-  finalScoreChange   Int             @default(0)
+  finalScoreChange   Int             @default(0) // Actual points awarded (admin-set points minus hint penalties)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   team               Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)

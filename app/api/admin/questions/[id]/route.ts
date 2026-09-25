@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { getQuestionDetailForAdmin } from "@/lib/round1";
+import { logActivity, ActivityActions } from "@/lib/activity";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
@@ -24,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const body = await req.json();
 
     const question = await prisma.question.findUnique({
@@ -49,6 +50,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         details: `Backup question "${question.title}" (Q${question.order.toString().padStart(2, '0')}) released by admin.`,
       });
 
+      await logActivity({
+        action: ActivityActions.QUESTION_UPDATED,
+        performedBy: session.email,
+        questionId: params.id,
+        details: `Released backup question "${question.title}"`,
+        metadata: { action: 'RELEASE', isCore: false }
+      });
+
       return NextResponse.json({ success: true, question: updated });
     }
 
@@ -64,6 +73,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         actor: "ADMIN",
         action: "BACKUP_QUESTION_LOCKED",
         details: `Backup question "${question.title}" (Q${question.order.toString().padStart(2, '0')}) locked by admin.`,
+      });
+
+      await logActivity({
+        action: ActivityActions.QUESTION_UPDATED,
+        performedBy: session.email,
+        questionId: params.id,
+        details: `Locked backup question "${question.title}"`,
+        metadata: { action: 'LOCK', isCore: false }
       });
 
       return NextResponse.json({ success: true, question: updated });
@@ -93,6 +110,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       details: `Question "${question.title}" (Q${question.order.toString().padStart(2, '0')}) was updated by admin.`,
     });
 
+    await logActivity({
+      action: ActivityActions.QUESTION_UPDATED,
+      performedBy: session.email,
+      questionId: params.id,
+      details: `Updated question "${question.title}"`,
+      metadata: { updatedFields: Object.keys(updateData) }
+    });
+
     return NextResponse.json({ success: true, question: updated });
   } catch (err: any) {
     if (err.message === "UNAUTHORIZED_ADMIN") {
@@ -104,7 +129,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const q = await prisma.question.findUnique({
       where: { id: params.id },
       include: { round: true },
@@ -118,6 +143,13 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
       actor: "ADMIN",
       action: "QUESTION_DELETED",
       details: `Question "${q.title}" (Q${q.order.toString().padStart(2, '0')}) was deleted.`,
+    });
+
+    await logActivity({
+      action: ActivityActions.QUESTION_DELETED,
+      performedBy: session.email,
+      details: `Deleted question "${q.title}" (${q.points} pts)`,
+      metadata: { title: q.title, points: q.points, order: q.order }
     });
 
     return NextResponse.json({ success: true, message: "Question deleted" });

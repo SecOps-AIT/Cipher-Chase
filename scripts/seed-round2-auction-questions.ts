@@ -396,7 +396,8 @@ async function main() {
           topic,
           outline,
           baseTimeSeconds,
-          basePoints,
+          points: basePoints,
+          hintPenalty: -10,
           status: "DRAFT",
         },
       });

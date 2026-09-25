@@ -210,15 +210,6 @@ export function CommandHeader({
                 </button>
               )}
 
-              <Link
-                href="/leaderboard"
-                target="_blank"
-                title="Live Scoreboard"
-                className="p-1.5 rounded border border-slate-800 hover:border-amber-500/40 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-amber-400 transition-colors"
-              >
-                <Trophy className="w-4 h-4" />
-              </Link>
-
               {onLogout && (
                 <button
                   type="button"

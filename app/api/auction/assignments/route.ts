@@ -13,9 +13,23 @@ export async function GET(request: NextRequest) {
 
     const assignments = await getTeamActiveAssignments(teamAuth.teamId);
 
+    const { getTimerStatus } = await import("@/lib/round2-timer");
+    const visibleAssignments = await Promise.all(assignments.map(async (assignment) => {
+      const timer = await getTimerStatus(assignment.id, teamAuth.teamId!);
+      return {
+        ...assignment,
+        questionTitle: assignment.title,
+        bidTimeSeconds: assignment.winningBidSeconds,
+        points: assignment.points, // Admin-set points (no bonus)
+        outcome: assignment.status,
+        timeRemaining: timer.timer?.timeRemaining ?? null,
+        question: null,
+      };
+    }));
+
     return NextResponse.json({
       success: true,
-      assignments
+      assignments: visibleAssignments
     });
   } catch (error: any) {
     console.error("Get team assignments error:", error);

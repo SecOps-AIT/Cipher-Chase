@@ -202,7 +202,7 @@ export async function processExpiredTimers(): Promise<{
       auctionQuestion: { 
         select: { 
           title: true,
-          basePoints: true,
+          points: true, // Admin-set points
           round: { select: { eventId: true, id: true } }
         } 
       }
@@ -214,33 +214,28 @@ export async function processExpiredTimers(): Promise<{
   for (const assignment of expiredAssignments) {
     try {
       await prisma.$transaction(async (tx) => {
-        // Mark as failed
+        // Mark as failed - NO PENALTY APPLIED TO SCORE
+        // In new rules, admin just doesn't award points if failed
         await tx.teamChallengeAssignment.update({
           where: { id: assignment.id },
           data: {
             status: "FAILED",
             failedAt: now,
-            finalScoreChange: assignment.bonusPoints * -1 // Apply negative penalty
+            finalScoreChange: 0 // No score change for failure
           }
         });
 
-        // Apply score penalty
-        await tx.team.update({
-          where: { id: assignment.teamId },
-          data: {
-            score: { increment: assignment.bonusPoints * -1 } // Negative bonus
-          }
-        });
+        // NO SCORE PENALTY - Team simply doesn't get the points
 
-        // Create score event
+        // Create score event for tracking (0 points)
         await tx.scoreEvent.create({
           data: {
             eventId: assignment.auctionQuestion.round.eventId,
             teamId: assignment.teamId,
             roundId: assignment.auctionQuestion.round.id,
-            type: "ROUND_2_TIMEOUT_PENALTY",
-            points: assignment.bonusPoints * -1,
-            reason: `Time auction failure penalty for "${assignment.auctionQuestion.title}"`
+            type: "ROUND_2_TIMEOUT",
+            points: 0,
+            reason: `Time expired for "${assignment.auctionQuestion.title}" (no points awarded)`
           }
         });
 
@@ -250,7 +245,7 @@ export async function processExpiredTimers(): Promise<{
           teamId: assignment.teamId,
           actor: "SYSTEM",
           action: "QUESTION_TIMEOUT",
-          details: `Team "${assignment.team.name}" timed out on "${assignment.auctionQuestion.title}" (penalty: ${assignment.bonusPoints * -1})`
+          details: `Team "${assignment.team.name}" timed out on "${assignment.auctionQuestion.title}" (no points awarded)`
         });
       }, { timeout: 20000, maxWait: 10000 });
 
@@ -359,10 +354,8 @@ export async function submitQuestionAnswer({
     let status = assignment.status;
 
     if (isCorrect) {
-      // Calculate successful completion score
-      const basePoints = assignment.auctionQuestion.basePoints;
-      const bonusPoints = assignment.bonusPoints;
-      scoreChange = basePoints + bonusPoints;
+      // NO BONUS - Award admin-set points only
+      scoreChange = assignment.auctionQuestion.points;
       status = "COMPLETED";
 
       // Update assignment
@@ -392,7 +385,7 @@ export async function submitQuestionAnswer({
           roundId: assignment.auctionQuestion.round.id,
           type: "ROUND_2_SOLVE",
           points: scoreChange,
-          reason: `Solved "${assignment.auctionQuestion.title}" in ${timeUsedSeconds}s`
+          reason: `Solved "${assignment.auctionQuestion.title}" (+${scoreChange} pts)`
         }
       });
 
@@ -402,7 +395,7 @@ export async function submitQuestionAnswer({
         teamId,
         actor: "TEAM",
         action: "QUESTION_SOLVED",
-        details: `Team "${assignment.team.name}" solved "${assignment.auctionQuestion.title}" in ${timeUsedSeconds}s (+${scoreChange} pts)`
+        details: `Team "${assignment.team.name}" solved "${assignment.auctionQuestion.title}" (+${scoreChange} pts)`
       });
     } else {
       // Log incorrect attempt
@@ -449,7 +442,7 @@ export async function getActiveAssignmentsForAdmin(roundId: string) {
         select: { 
           title: true,
           topic: true,
-          basePoints: true,
+          points: true, // Admin-set points
           baseTimeSeconds: true
         } 
       }
@@ -483,7 +476,7 @@ export async function getActiveAssignmentsForAdmin(roundId: string) {
       startedAt: assignment.startedAt?.toISOString() || null,
       deadlineAt: assignment.deadlineAt?.toISOString() || null,
       timeRemaining,
-      potentialBonus: assignment.bonusPoints,
+      points: assignment.auctionQuestion.points, // Admin-set points (no bonus)
       outcome
     };
   });

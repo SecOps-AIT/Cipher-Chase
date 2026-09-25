@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/auth";
 import { CreateTeamSchema } from "@/lib/validation";
 import { createTeam } from "@/lib/teams";
+import { logActivity, ActivityActions } from "@/lib/activity";
 
 export async function GET() {
   try {
@@ -42,7 +43,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const body = await req.json();
     const result = CreateTeamSchema.safeParse(body);
 
@@ -62,6 +63,19 @@ export async function POST(req: Request) {
       name: result.data.name,
       joinCode: result.data.joinCode,
       members: result.data.members,
+    });
+
+    // Log activity
+    await logActivity({
+      eventId: event.id,
+      teamId: newTeam.id,
+      action: ActivityActions.TEAM_CREATED,
+      performedBy: session.email,
+      details: `Created team "${newTeam.name}"`,
+      metadata: {
+        joinCode: newTeam.joinCode,
+        memberCount: result.data.members?.length || 0,
+      },
     });
 
     return NextResponse.json({ success: true, team: newTeam });

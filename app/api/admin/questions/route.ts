@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/auth";
 import { QuestionSchema } from "@/lib/validation";
 import { logAuditEvent } from "@/lib/audit";
+import { logActivity, ActivityActions } from "@/lib/activity";
 
 export async function GET() {
   try {
@@ -49,7 +50,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await requireAdminSession();
+    const session = await requireAdminSession();
     const body = await req.json();
     const result = QuestionSchema.safeParse(body);
 
@@ -91,6 +92,14 @@ export async function POST(req: Request) {
       actor: "ADMIN",
       action: "QUESTION_CREATED",
       details: `Created challenge "${newQuestion.title}" (Q${newQuestion.order.toString().padStart(2, '0')}, ${newQuestion.points} pts, ${newQuestion.difficulty})`,
+    });
+
+    await logActivity({
+      action: ActivityActions.QUESTION_CREATED,
+      performedBy: session.email,
+      questionId: newQuestion.id,
+      details: `Created question "${newQuestion.title}" (${newQuestion.points} pts)`,
+      metadata: { title: newQuestion.title, points: newQuestion.points, difficulty: newQuestion.difficulty }
     });
 
     return NextResponse.json({ success: true, question: newQuestion });

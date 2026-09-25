@@ -40,7 +40,7 @@ interface LiveAuction {
   topic: string;
   outline: string;
   baseTimeSeconds: number;
-  basePoints: number;
+  points: number; // Admin-set points (no bonus)
   status: "DRAFT" | "OPEN" | "CLOSED" | "SOLD";
   bidCount: number;
   lowestBid: {
@@ -51,7 +51,6 @@ interface LiveAuction {
     bidTimeSeconds: number;
     submittedAt: string;
   } | null;
-  potentialBonus: number;
 }
 
 interface TeamAssignment {
@@ -225,14 +224,22 @@ export default function TeamRound2Page() {
       });
 
       if (res.ok) {
-        // Refresh assignments and immediately open the newly active target
+        // Starting the assignment begins its timer. Fetch the question only after
+        // that action so a team cannot read it before choosing to start.
+        const questionRes = await fetch(`/api/auction/assignments/${assignmentId}/question`);
+        if (!questionRes.ok) throw new Error("Question could not be opened");
+        const questionData = await questionRes.json();
         const assignmentsRes = await fetch("/api/auction/assignments");
         if (assignmentsRes.ok) {
           const { assignments: fresh } = await assignmentsRes.json();
           setAssignments(fresh || []);
           const target = fresh?.find((a: any) => a.id === assignmentId);
           if (target) {
-            setSelectedAssignment(target);
+            setSelectedAssignment({
+              ...target,
+              timeRemaining: questionData.timer?.timeRemaining ?? target.timeRemaining,
+              question: questionData.question,
+            });
             setFlagInput("");
             setSubmitFeedback(null);
           }
@@ -589,8 +596,11 @@ export default function TeamRound2Page() {
 
                       {isActive && (
                         <button
-                          onClick={() => {
-                            setSelectedAssignment(assignment);
+                          onClick={async () => {
+                            const questionRes = await fetch(`/api/auction/assignments/${assignment.id}/question`);
+                            if (!questionRes.ok) return;
+                            const data = await questionRes.json();
+                            setSelectedAssignment({ ...assignment, timeRemaining: data.timer?.timeRemaining ?? assignment.timeRemaining, question: data.question });
                             setSubmitFeedback(null);
                             setFlagInput("");
                           }}
@@ -680,8 +690,8 @@ export default function TeamRound2Page() {
                         <span className="text-white font-bold">{formatTime(auction.baseTimeSeconds)}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="text-slate-400">Base Points:</span>
-                        <span className="text-emerald-400 font-bold">{auction.basePoints} pts</span>
+                        <span className="text-slate-400">Points:</span>
+                        <span className="text-emerald-400 font-bold">{auction.points} pts</span>
                       </div>
                       <div className="flex items-center justify-between text-xs font-mono">
                         <span className="text-slate-400">Total Bids:</span>
@@ -808,12 +818,8 @@ export default function TeamRound2Page() {
                   <span className="text-cyan-400 font-bold">{formatTime(selectedAuction.baseTimeSeconds)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-400">Base Points:</span>
-                  <span className="text-emerald-400 font-bold">{selectedAuction.basePoints} pts</span>
-                </div>
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-400">Potential Bonus:</span>
-                  <span className="text-purple-400 font-bold">+{selectedAuction.potentialBonus} pts</span>
+                  <span className="text-slate-400">Points:</span>
+                  <span className="text-emerald-400 font-bold">{selectedAuction.points} pts</span>
                 </div>
               </div>
 

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint --dir app --dir lib --dir hooks --dir tests",
     "seed": "tsx prisma/seed.ts",
-    "test": "vitest run"
+    "test": "npm run test:unit",
+    "test:unit": "vitest run tests/game-logic.test.ts tests/backup-question-release.test.ts tests/per-team-timer.test.ts tests/team-and-round1.test.ts",
+    "test:integration": "tsx scripts/run-integration-tests.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

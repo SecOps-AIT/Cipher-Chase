@@ -21,7 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { formatTime, parseTimeToSeconds, calculateBonus } from "@/lib/round2-auction";
+import { formatTime, parseTimeToSeconds } from "@/lib/round2-auction";
 
 interface AuctionQuestion {
   id: string;
@@ -30,7 +30,8 @@ interface AuctionQuestion {
   topic: string;
   outline: string;
   baseTimeSeconds: number;
-  basePoints: number;
+  points: number; // Admin-set points, no bonus
+  hintPenalty?: number; // Admin-set hint penalty
   status: "DRAFT" | "OPEN" | "CLOSED" | "SOLD";
   displayedAt: string | null;
   auctionClosedAt: string | null;
@@ -85,7 +86,7 @@ export default function AdminLiveAuctionPage() {
     teamName: string;
     joinCode: string;
     bidTime: string;
-    bonusPoints: number;
+    points: number; // Admin-set points (no bonus)
     potentialScore: number;
     penaltyPoints: number;
   } | null>(null);
@@ -258,7 +259,8 @@ export default function AdminLiveAuctionPage() {
       }
 
       const teamObj = teams.find((t) => t.id === selectedTeamId);
-      const bonusCalc = calculateBonus(activeQuestion.baseTimeSeconds, totalSeconds, activeQuestion.basePoints);
+      // NO BONUS CALCULATION - Admin-set points only
+      const points = activeQuestion.points || 200; // Use admin-set points
 
       setSoldModalData({
         isOpen: true,
@@ -266,9 +268,9 @@ export default function AdminLiveAuctionPage() {
         teamName: teamObj?.name || "Squad",
         joinCode: teamObj?.joinCode || "",
         bidTime: formatTime(totalSeconds),
-        bonusPoints: bonusCalc.bonusPoints,
-        potentialScore: bonusCalc.potentialScore,
-        penaltyPoints: Math.abs(bonusCalc.failurePenalty),
+        points: points, // Fixed points, no bonus
+        potentialScore: points, // Same as points
+        penaltyPoints: 0, // No penalty in new rules
       });
 
       setSuccessMessage(
@@ -472,7 +474,7 @@ export default function AdminLiveAuctionPage() {
                             </span>
                           )}
                           <span className="text-[11px] font-mono font-bold text-amber-300">
-                            {q.basePoints} pts
+                            {q.points || 200} pts
                           </span>
                         </div>
                       </div>
@@ -532,7 +534,7 @@ export default function AdminLiveAuctionPage() {
                         BASE VALUE
                       </span>
                       <span className="text-2xl font-black font-mono text-amber-400">
-                        {activeQuestion.basePoints}{" "}
+                        {activeQuestion.points || 200}{" "}
                         <span className="text-xs text-slate-500 font-normal">PTS</span>
                       </span>
                     </div>
@@ -552,24 +554,24 @@ export default function AdminLiveAuctionPage() {
                       <span className="text-[10px] font-mono text-slate-400 uppercase block">
                         Base Points
                       </span>
-                      <span className="text-base font-bold font-mono text-amber-400">
-                        +{activeQuestion.basePoints} pts
-                      </span>
-                    </div>
-                    <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
-                      <span className="text-[10px] font-mono text-slate-400 uppercase block">
-                        Potential Bonus
-                      </span>
                       <span className="text-base font-bold font-mono text-emerald-400">
-                        +{calculateBonus(activeQuestion.baseTimeSeconds, bidMinutes * 60 + bidSeconds, activeQuestion.basePoints).bonusPoints} pts
+                        +{activeQuestion.points || 200} pts
                       </span>
                     </div>
                     <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
                       <span className="text-[10px] font-mono text-slate-400 uppercase block">
-                        Failure Penalty
+                        Time Bid
                       </span>
-                      <span className="text-base font-bold font-mono text-rose-400">
-                        -{Math.abs(calculateBonus(activeQuestion.baseTimeSeconds, bidMinutes * 60 + bidSeconds, activeQuestion.basePoints).failurePenalty)} pts
+                      <span className="text-base font-bold font-mono text-cyan-400">
+                        {bidMinutes}:{bidSeconds.toString().padStart(2, '0')}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
+                      <span className="text-[10px] font-mono text-slate-400 uppercase block">
+                        Status
+                      </span>
+                      <span className="text-base font-bold font-mono text-slate-300">
+                        NO PENALTY
                       </span>
                     </div>
                   </div>
@@ -766,11 +768,11 @@ export default function AdminLiveAuctionPage() {
                         </div>
                         <div className="h-px bg-slate-800 my-1" />
                         <div className="flex justify-between text-xs font-mono">
-                          <span className="text-emerald-400 font-bold">Bonus Reward if Solved (+1 pt/s):</span>
+                          <span className="text-emerald-400 font-bold">Points if Solved:</span>
                           <span className="text-emerald-400 font-bold">
-                            +{activeQuestion.basePoints + Math.max(0, activeQuestion.baseTimeSeconds - (bidMinutes * 60 + bidSeconds))} PTS
+                            +{activeQuestion.points || 200} PTS
                             <span className="text-[10px] text-slate-500 ml-1">
-                              ({activeQuestion.basePoints} base + {Math.max(0, activeQuestion.baseTimeSeconds - (bidMinutes * 60 + bidSeconds))} bonus)
+                              (No time bonus)
                             </span>
                           </span>
                         </div>
@@ -940,12 +942,12 @@ export default function AdminLiveAuctionPage() {
               <div className="flex justify-between">
                 <span className="text-slate-400">Potential Solve Payout:</span>
                 <span className="text-emerald-400 font-bold">
-                  +{soldModalData.potentialScore} PTS (+{soldModalData.bonusPoints} bonus)
+                  +{soldModalData.potentialScore} PTS
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Failure Penalty Risk:</span>
-                <span className="text-rose-400 font-bold">-{soldModalData.penaltyPoints} PTS</span>
+                <span className="text-slate-400 font-bold">No Penalty</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-slate-800">
                 <span className="text-slate-400">Squad Console Status:</span>
