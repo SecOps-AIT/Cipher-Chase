@@ -75,7 +75,7 @@ export default function HomePage() {
           <div className="flex items-center space-x-2 mb-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400" />
             <h3 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
-              ROUND 01 — 20 OPERATION TARGETS
+              ROUND 01 — 15 OPERATION TARGETS
             </h3>
           </div>
           <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
