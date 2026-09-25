@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTeamActiveAssignments } from "@/lib/round2-auction";
+import { processExpiredTimers } from "@/lib/round2-timer";
 import { validateTeamAuth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -10,6 +11,12 @@ export async function GET(request: NextRequest) {
     if (!teamAuth.success || !teamAuth.teamId) {
       return NextResponse.json({ error: teamAuth.error || "Authentication required" }, { status: 401 });
     }
+
+    // No cron sweeps expired Round 2 timers, so piggyback it on this poll
+    // (called every 4s by the team dashboard) — applies FAILED status and
+    // any timeout penalty as soon as a deadline passes, not just when the
+    // timed-out team happens to be polling.
+    await processExpiredTimers();
 
     const assignments = await getTeamActiveAssignments(teamAuth.teamId);
 

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getActiveAssignmentsForAdmin } from "@/lib/round2-timer";
+import { getActiveAssignmentsForAdmin, processExpiredTimers } from "@/lib/round2-timer";
 import { validateAdminAuth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
     if (!adminAuth.success) {
       return NextResponse.json({ error: adminAuth.error }, { status: 401 });
     }
+
+    // Backstop sweep for expired Round 2 timers, in case no team happens to
+    // be polling when a deadline passes (see also /api/auction/assignments).
+    await processExpiredTimers();
 
     const url = new URL(request.url);
     let roundId = url.searchParams.get("roundId");
