@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { setTeamSessionCookie } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { getNextCC26Code } from "@/lib/teams";
+import { startTeamRound1Timer } from "@/lib/round1";
 
 /**
  * POST /api/team/join
@@ -209,6 +210,9 @@ export async function POST(req: Request) {
         action: "MEMBER_LOGGED_IN",
         details: `${existingMember.name} accessed team "${team.name}" using join code.`,
       });
+
+      // Start the Round 1 timer on first login (idempotent — no-op if already started)
+      await startTeamRound1Timer(team.id);
 
       return NextResponse.json({
         success: true,

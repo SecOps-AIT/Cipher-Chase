@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   PlayCircle,
   PauseCircle,
   CheckCircle2,
   AlertTriangle,
   Clock,
-  Zap,
   Sliders,
   X,
   Edit2,
   Lock,
   ChevronRight,
-  Layers,
   Sparkles,
   PlusCircle,
-  RotateCcw,
+  Timer,
+  Users,
 } from "lucide-react";
 
 export default function AdminRound1ControlPage() {
@@ -28,6 +27,19 @@ export default function AdminRound1ControlPage() {
   }>({ teamsCount: 0, questionsCount: 0, solvesCount: 0 });
   const [questions, setQuestions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [teamTimers, setTeamTimers] = useState<{
+    totalTeams: number;
+    notStarted: number;
+    active: number;
+    expired: number;
+    teams: {
+      teamId: string;
+      teamName: string;
+      status: "NOT_STARTED" | "ACTIVE" | "EXPIRED";
+      secondsRemaining: number;
+      duration: number;
+    }[];
+  }>({ totalTeams: 0, notStarted: 0, active: 0, expired: 0, teams: [] });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -72,18 +84,21 @@ export default function AdminRound1ControlPage() {
     if (fetchDataInFlightRef.current) return;
     fetchDataInFlightRef.current = true;
     try {
-      const [qRes, lbRes, statusRes] = await Promise.all([
+      const [qRes, lbRes, statusRes, timersRes] = await Promise.all([
         fetch("/api/admin/questions", { cache: "no-store" }),
         fetch("/api/leaderboard", { cache: "no-store" }),
         fetch("/api/admin/round/status", { cache: "no-store" }),
+        fetch("/api/admin/round-1/timers", { cache: "no-store" }),
       ]);
 
       const qData = qRes.ok ? await qRes.json() : { questions: [] };
       const lbData = lbRes.ok ? await lbRes.json() : { leaderboard: [] };
       const statusData = statusRes.ok ? await statusRes.json() : null;
+      const timersData = timersRes.ok ? await timersRes.json() : null;
 
       setQuestions(qData.questions || []);
       setLeaderboard(lbData.leaderboard || []);
+      if (timersData) setTeamTimers(timersData);
       if (statusData) {
         setRound(statusData.round);
         setRoundStats(statusData.stats);
@@ -115,7 +130,7 @@ export default function AdminRound1ControlPage() {
   // Release selected backup questions
   const handleReleaseBackup = async () => {
     if (selectedBackupIds.length === 0) return;
-    
+
     setActionLoading(true);
     try {
       const res = await fetch("/api/admin/questions/backup", {
@@ -123,7 +138,7 @@ export default function AdminRound1ControlPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ questionIds: selectedBackupIds }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         alert(`✅ ${data.message}`);
@@ -232,50 +247,6 @@ export default function AdminRound1ControlPage() {
     }
   };
 
-  // Batch management: Activate, Reset, Extend
-  const handleActivateBatch = async (batchNumber: number = 1, resetAll: boolean = false) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch("/api/admin/round-1/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: resetAll ? "RESET_ALL" : "ACTIVATE",
-          batchNumber,
-          durationMinutes: 15,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to activate batch");
-      fetchData();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleExtendBatch = async (extraMinutes: number = 5) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch("/api/admin/round-1/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "EXTEND",
-          extraMinutes,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to extend batch");
-      fetchData();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleAdjustScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTeamId || !adjustReason.trim()) return;
@@ -301,52 +272,7 @@ export default function AdminRound1ControlPage() {
     }
   };
 
-  // Group questions by batch/time
-  const activeQuestions = questions.filter(
-    (q) => new Date(q.releaseAt) <= now && new Date(q.closeAt) > now && q.isActive
-  );
-  const upcomingQuestions = questions.filter((q) => new Date(q.releaseAt) > now && q.isActive);
-  const closedQuestions = questions.filter((q) => new Date(q.closeAt) <= now || !q.isActive);
-
-  // Group upcoming questions by batch
-  const upcomingBatches = useMemo(() => {
-    const batchesMap = new Map<number, typeof questions>();
-    upcomingQuestions.forEach((q) => {
-      const bNum = q.batchNumber || 1;
-      const list = batchesMap.get(bNum) || [];
-      list.push(q);
-      batchesMap.set(bNum, list);
-    });
-    return Array.from(batchesMap.entries())
-      .map(([batchNumber, batchQuestions]) => {
-        const earliestRelease = new Date(
-          Math.min(...batchQuestions.map((q) => new Date(q.releaseAt).getTime()))
-        );
-        const secondsUntil = Math.max(0, Math.ceil((earliestRelease.getTime() - now.getTime()) / 1000));
-        return {
-          batchNumber,
-          questions: batchQuestions,
-          earliestRelease,
-          secondsUntil,
-        };
-      })
-      .sort((a, b) => a.batchNumber - b.batchNumber);
-  }, [upcomingQuestions, now]);
-
-  // Current batch calculation
-  const totalBatches = useMemo(() => {
-    const bNums = questions.map((q) => q.batchNumber || 1);
-    return bNums.length > 0 ? Math.max(...bNums) : 1;
-  }, [questions]);
-
-  const currentBatchNumber = activeQuestions.length > 0 ? (activeQuestions[0].batchNumber || 1) : 1;
-
-  // Time remaining for currently active batch
-  const activeBatchSecondsRemaining = useMemo(() => {
-    if (activeQuestions.length === 0) return 0;
-    const latestClose = new Date(Math.max(...activeQuestions.map((q) => new Date(q.closeAt).getTime())));
-    return Math.max(0, Math.ceil((latestClose.getTime() - now.getTime()) / 1000));
-  }, [activeQuestions, now]);
+  const activeQuestions = questions.filter((q) => q.isActive);
 
   const formatTimer = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -412,7 +338,7 @@ export default function AdminRound1ControlPage() {
         </div>
       </div>
 
-      {/* Round Status & Quick Batch Activation Bar */}
+      {/* Round Status Bar */}
       <div className="p-6 bg-slate-900/80 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-6">
         <div>
           <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block">
@@ -432,103 +358,100 @@ export default function AdminRound1ControlPage() {
             />
             {round?.status || "DRAFT"}
           </div>
+          <p className="text-[11px] text-slate-500 font-mono mt-2">
+            Each team's timer starts automatically the moment they log in — there is no shared
+            release schedule.
+          </p>
         </div>
 
         <div className="flex items-center gap-6">
           <div className="text-center">
-            <span className="text-xs font-mono text-slate-400 block">CURRENT BATCH</span>
-            <span className="text-xl font-bold font-mono text-cyan-400">
-              {activeQuestions.length > 0 ? `Batch ${currentBatchNumber} / ${totalBatches}` : "Idle"}
-            </span>
+            <span className="text-xs font-mono text-slate-400 block">TEAMS NOT STARTED</span>
+            <span className="text-xl font-bold font-mono text-slate-400">{teamTimers.notStarted}</span>
           </div>
           <div className="text-center pl-6 border-l border-slate-800">
-            <span className="text-xs font-mono text-slate-400 block">ACTIVE</span>
-            <span className="text-xl font-bold font-mono text-emerald-400">{activeQuestions.length} challenges</span>
+            <span className="text-xs font-mono text-slate-400 block">TIMERS RUNNING</span>
+            <span className="text-xl font-bold font-mono text-emerald-400">{teamTimers.active}</span>
           </div>
           <div className="text-center pl-6 border-l border-slate-800">
-            <span className="text-xs font-mono text-slate-400 block">UPCOMING</span>
-            <span className="text-xl font-bold font-mono text-purple-400">{upcomingQuestions.length} challenges</span>
+            <span className="text-xs font-mono text-slate-400 block">TIME EXPIRED</span>
+            <span className="text-xl font-bold font-mono text-rose-400">{teamTimers.expired}</span>
           </div>
           <div className="text-center pl-6 border-l border-slate-800">
-            <span className="text-xs font-mono text-slate-400 block">EXPIRED</span>
-            <span className="text-xl font-bold font-mono text-slate-400">{closedQuestions.length} challenges</span>
+            <span className="text-xs font-mono text-slate-400 block">TOTAL QUESTIONS</span>
+            <span className="text-xl font-bold font-mono text-cyan-400">{activeQuestions.length}</span>
           </div>
         </div>
       </div>
 
-      {/* QUICK BATCH LAUNCH CONTROLS */}
-      <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 font-mono text-xs text-slate-300">
-          <Layers className="w-4 h-4 text-cyan-400" />
-          <span><strong>Batch Scheduling Controls:</strong> Launch batches or extend timers live:</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => handleActivateBatch(1, true)}
-            disabled={actionLoading}
-            className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-mono text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
-            title="Reset Batch 1, 2, 3 timings starting from right now (15m each)"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            START / RESET BATCH 1
-          </button>
-
-          <button
-            onClick={() => handleActivateBatch(2, false)}
-            disabled={actionLoading}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-mono text-xs rounded-lg transition-colors"
-          >
-            ACTIVATE BATCH 2
-          </button>
-
-          <button
-            onClick={() => handleActivateBatch(3, false)}
-            disabled={actionLoading}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-mono text-xs rounded-lg transition-colors"
-          >
-            ACTIVATE BATCH 3
-          </button>
-
-          <button
-            onClick={() => handleExtendBatch(5)}
-            disabled={actionLoading || activeQuestions.length === 0}
-            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 disabled:opacity-30 font-mono text-xs rounded-lg transition-colors"
-          >
-            +5 MINS
-          </button>
-        </div>
-      </div>
-
-      {/* Main Grid: Batches on Left, Live Score Feed on Right */}
+      {/* Main Grid: Team Timers on Left, Live Score Feed on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Batches Overview (2 Cols) */}
+        {/* Per-Team Timer Roster (2 Cols) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* CURRENT BATCH SECTION */}
           <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 block">
-                  CURRENT BATCH
-                </span>
-                <h3 className="text-lg font-bold font-mono text-white flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-cyan-400" />
-                  Batch {currentBatchNumber} / {totalBatches}
-                </h3>
-              </div>
+              <h3 className="text-sm font-bold font-mono text-white uppercase tracking-wider flex items-center gap-2">
+                <Users className="w-4 h-4 text-cyan-400" />
+                TEAM TIMERS ({teamTimers.totalTeams})
+              </h3>
+              <span className="text-xs font-mono text-slate-400">Auto-starts on login</span>
+            </div>
 
-              {activeQuestions.length > 0 ? (
-                <div className="text-right">
-                  <span className="text-[10px] font-mono text-slate-400 block uppercase">TIME REMAINING</span>
-                  <span className="text-2xl font-black font-mono text-amber-400 tracking-wider">
-                    {formatTimer(activeBatchSecondsRemaining)}
-                  </span>
+            <div className="space-y-2.5 max-h-[600px] overflow-y-auto">
+              {teamTimers.teams.map((t) => (
+                <div
+                  key={t.teamId}
+                  className="p-4 bg-slate-950 border border-slate-800/90 rounded-xl flex items-center justify-between text-xs font-mono"
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        t.status === "ACTIVE"
+                          ? "bg-emerald-400 animate-pulse"
+                          : t.status === "EXPIRED"
+                          ? "bg-rose-400"
+                          : "bg-slate-500"
+                      }`}
+                    />
+                    <span className="text-white font-bold">{t.teamName}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                        t.status === "ACTIVE"
+                          ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/40"
+                          : t.status === "EXPIRED"
+                          ? "bg-rose-950/40 text-rose-300 border-rose-500/40"
+                          : "bg-slate-800/60 text-slate-400 border-slate-700"
+                      }`}
+                    >
+                      {t.status.replace("_", " ")}
+                    </span>
+                    {t.status === "ACTIVE" && (
+                      <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                        <Timer className="w-3.5 h-3.5" />
+                        {formatTimer(t.secondsRemaining)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="text-right">
-                  <span className="text-xs font-mono text-slate-500">Batch Expired / Inactive</span>
+              ))}
+
+              {teamTimers.teams.length === 0 && (
+                <div className="py-8 text-center text-slate-500 font-mono text-xs">
+                  No teams registered yet.
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Questions Overview */}
+          <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <h3 className="text-sm font-bold font-mono text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className="w-4 h-4" /> QUESTIONS ({activeQuestions.length})
+              </h3>
             </div>
 
             <div className="space-y-2.5">
@@ -562,72 +485,11 @@ export default function AdminRound1ControlPage() {
               ))}
 
               {activeQuestions.length === 0 && (
-                <div className="py-8 text-center space-y-3">
-                  <p className="text-xs text-slate-400 font-mono">
-                    No questions currently active. Ready to launch the competition?
-                  </p>
-                  <button
-                    onClick={() => handleActivateBatch(1, true)}
-                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-2"
-                  >
-                    <Zap className="w-4 h-4" />
-                    ACTIVATE BATCH 1 NOW
-                  </button>
+                <div className="py-8 text-center text-slate-400 font-mono text-xs">
+                  No questions created yet.
                 </div>
               )}
             </div>
-          </div>
-
-          {/* UPCOMING BATCHES SECTION */}
-          <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-              <h3 className="text-sm font-bold font-mono text-purple-400 uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-4 h-4" /> UPCOMING BATCHES
-              </h3>
-              <span className="text-xs font-mono text-slate-400">
-                {upcomingBatches.length} queued
-              </span>
-            </div>
-
-            {upcomingBatches.length > 0 ? (
-              <div className="space-y-3">
-                {upcomingBatches.map((b) => (
-                  <div
-                    key={b.batchNumber}
-                    className="p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-300"
-                  >
-                    <div>
-                      <div className="font-bold text-white flex items-center gap-2">
-                        <Layers className="w-3.5 h-3.5 text-purple-400" />
-                        Batch {b.batchNumber}
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        {b.questions.map((q) => `Q${q.order.toString().padStart(2, "0")}`).join(", ")} ({b.questions.length} questions)
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-500 block uppercase">Starts in</span>
-                        <span className="font-bold text-purple-300">
-                          {formatTimer(b.secondsUntil)}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleActivateBatch(b.batchNumber, false)}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-purple-600/30 border border-slate-700 hover:border-purple-500/50 text-slate-200 text-[11px] rounded-lg transition-colors"
-                      >
-                        Launch Now
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-6 text-center text-slate-500 font-mono text-xs">
-                NO UPCOMING BATCHES
-              </div>
-            )}
           </div>
         </div>
 
@@ -1124,7 +986,7 @@ export default function AdminRound1ControlPage() {
                             Q{q.order.toString().padStart(2, "0")} — {q.title}
                           </span>
                           <span className={`text-xs px-2 py-0.5 rounded ${
-                            q.difficulty === "EASY" 
+                            q.difficulty === "EASY"
                               ? "bg-cyan-500/20 text-cyan-300"
                               : q.difficulty === "MEDIUM"
                               ? "bg-amber-500/20 text-amber-300"
@@ -1139,7 +1001,7 @@ export default function AdminRound1ControlPage() {
                       <Lock className="w-4 h-4 text-amber-400" />
                     </label>
                   ))}
-                  
+
                   {backupQuestions.filter(q => !q.isReleased).length === 0 && (
                     <div className="text-center py-8 text-slate-500 text-sm">
                       All backup questions have been released.
@@ -1165,7 +1027,7 @@ export default function AdminRound1ControlPage() {
                               Q{q.order.toString().padStart(2, "0")} — {q.title}
                             </span>
                             <span className={`text-xs px-2 py-0.5 rounded ${
-                              q.difficulty === "EASY" 
+                              q.difficulty === "EASY"
                                 ? "bg-cyan-500/20 text-cyan-300"
                                 : q.difficulty === "MEDIUM"
                                 ? "bg-amber-500/20 text-amber-300"

@@ -709,6 +709,15 @@ export async function getRound1TimerStats(): Promise<{
     secondsRemaining: number;
     duration: number;
   }[];
+  teams: {
+    teamId: string;
+    teamName: string;
+    status: "NOT_STARTED" | "ACTIVE" | "EXPIRED";
+    startedAt: Date | null;
+    deadlineAt: Date | null;
+    secondsRemaining: number;
+    duration: number;
+  }[];
 }> {
   const now = new Date();
 
@@ -720,6 +729,7 @@ export async function getRound1TimerStats(): Promise<{
       round1DeadlineAt: true,
       round1Duration: true,
     },
+    orderBy: { name: "asc" },
   });
 
   let notStarted = 0;
@@ -735,18 +745,45 @@ export async function getRound1TimerStats(): Promise<{
     secondsRemaining: number;
     duration: number;
   }[] = [];
+  const teamStatuses: {
+    teamId: string;
+    teamName: string;
+    status: "NOT_STARTED" | "ACTIVE" | "EXPIRED";
+    startedAt: Date | null;
+    deadlineAt: Date | null;
+    secondsRemaining: number;
+    duration: number;
+  }[] = [];
 
   for (const team of teams) {
     if (!team.round1StartedAt || !team.round1DeadlineAt) {
       notStarted++;
+      teamStatuses.push({
+        teamId: team.id,
+        teamName: team.name,
+        status: "NOT_STARTED",
+        startedAt: null,
+        deadlineAt: null,
+        secondsRemaining: 0,
+        duration: team.round1Duration,
+      });
     } else {
       const secondsRemaining = Math.max(0, Math.floor((team.round1DeadlineAt.getTime() - now.getTime()) / 1000));
-      
+
       if (secondsRemaining > 0) {
         active++;
         activeTimers.push({
           teamId: team.id,
           teamName: team.name,
+          startedAt: team.round1StartedAt,
+          deadlineAt: team.round1DeadlineAt,
+          secondsRemaining,
+          duration: team.round1Duration,
+        });
+        teamStatuses.push({
+          teamId: team.id,
+          teamName: team.name,
+          status: "ACTIVE",
           startedAt: team.round1StartedAt,
           deadlineAt: team.round1DeadlineAt,
           secondsRemaining,
@@ -758,6 +795,15 @@ export async function getRound1TimerStats(): Promise<{
         const timeUsed = Math.floor((team.round1DeadlineAt.getTime() - team.round1StartedAt.getTime()) / 1000);
         totalTimeUsed += timeUsed;
         timeUsedCount++;
+        teamStatuses.push({
+          teamId: team.id,
+          teamName: team.name,
+          status: "EXPIRED",
+          startedAt: team.round1StartedAt,
+          deadlineAt: team.round1DeadlineAt,
+          secondsRemaining: 0,
+          duration: team.round1Duration,
+        });
       }
     }
   }
@@ -771,6 +817,7 @@ export async function getRound1TimerStats(): Promise<{
     expired,
     avgTimeUsed,
     activeTimers: activeTimers.sort((a, b) => a.secondsRemaining - b.secondsRemaining), // Sort by time remaining
+    teams: teamStatuses,
   };
 }
 
