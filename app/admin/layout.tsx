@@ -14,7 +14,6 @@ import {
   LogOut,
   ExternalLink,
   Activity,
-  Trophy,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -23,7 +22,6 @@ const NAV_ITEMS = [
   { href: "/admin/questions", label: "QUESTIONS BANK", icon: FileQuestion },
   { href: "/admin/round-1", label: "ROUND 1 CONTROL", icon: PlayCircle },
   { href: "/admin/auction", label: "ROUND 2 AUCTION", icon: Gavel },
-  { href: "/admin/leaderboard", label: "LEADERBOARD", icon: Trophy },
   { href: "/admin/qualification", label: "QUALIFICATION", icon: Calculator },
   { href: "/admin/audit", label: "AUDIT LOGS", icon: History },
 ];
