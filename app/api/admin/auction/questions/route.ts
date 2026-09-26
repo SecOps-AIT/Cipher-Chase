@@ -162,6 +162,14 @@ export async function GET(request: NextRequest) {
         displayedAt: true,
         auctionClosedAt: true,
         createdAt: true,
+        question: {
+          select: {
+            description: true,
+            answer: true,
+            difficulty: true,
+            category: true,
+          },
+        },
         bids: {
           include: {
             team: { select: { name: true } }
@@ -187,6 +195,10 @@ export async function GET(request: NextRequest) {
       points: aq.points, // Admin-set points
       hintPenalty: aq.hintPenalty, // Admin-set hint penalty
       failurePenalty: aq.failurePenalty, // Admin-set penalty on timeout
+      description: aq.question.description,
+      answer: aq.question.answer,
+      difficulty: aq.question.difficulty,
+      category: aq.question.category,
       status: aq.status,
       displayedAt: aq.displayedAt?.toISOString() || null,
       auctionClosedAt: aq.auctionClosedAt?.toISOString() || null,
@@ -205,6 +217,117 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Get auction questions error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// Update an auction question (and its underlying question)
+export async function PUT(request: NextRequest) {
+  try {
+    const adminAuth = await validateAdminAuth(request);
+    if (!adminAuth.success) {
+      return NextResponse.json({ error: adminAuth.error }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const {
+      title,
+      description,
+      answer,
+      difficulty,
+      category,
+      topic,
+      outline,
+      baseTimeSeconds,
+      points,
+      hintPenalty,
+      failurePenalty,
+    } = body;
+
+    if (
+      !title || !description || !answer || !difficulty || !category ||
+      !topic || !outline || !baseTimeSeconds || !points
+    ) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    if (baseTimeSeconds <= 0 || points <= 0) {
+      return NextResponse.json(
+        { error: "Base time and points must be positive" },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.auctionQuestion.findUnique({
+      where: { id },
+      select: { questionId: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Auction question not found" }, { status: 404 });
+    }
+
+    const { question, auctionQuestion } = await prisma.$transaction(async (tx) => {
+      const question = await tx.question.update({
+        where: { id: existing.questionId },
+        data: { title, description, answer, points, difficulty, category },
+      });
+
+      const auctionQuestion = await tx.auctionQuestion.update({
+        where: { id },
+        data: {
+          title,
+          topic,
+          outline,
+          baseTimeSeconds,
+          points,
+          hintPenalty: hintPenalty ?? -10,
+          failurePenalty: failurePenalty ?? 0,
+        },
+      });
+
+      return { question, auctionQuestion };
+    });
+
+    await logAuditEvent({
+      actor: "ADMIN",
+      action: "AUCTION_QUESTION_UPDATED",
+      details: `Updated auction question "${title}" (${points} pts)`,
+    });
+
+    return NextResponse.json({
+      success: true,
+      auctionQuestion: {
+        id: auctionQuestion.id,
+        questionId: question.id,
+        title: auctionQuestion.title,
+        topic: auctionQuestion.topic,
+        outline: auctionQuestion.outline,
+        baseTimeSeconds: auctionQuestion.baseTimeSeconds,
+        points: auctionQuestion.points,
+        hintPenalty: auctionQuestion.hintPenalty,
+        failurePenalty: auctionQuestion.failurePenalty,
+        status: auctionQuestion.status,
+        description: question.description,
+        answer: question.answer,
+        difficulty: question.difficulty,
+        category: question.category,
+      },
+    });
+  } catch (error: any) {
+    console.error("Update auction question error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

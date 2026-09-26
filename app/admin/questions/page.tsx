@@ -43,9 +43,13 @@ interface AuctionQuestion {
   hintPenalty: number;
   failurePenalty: number;
   status: string;
-  answer?: string;
-  difficulty?: string;
-  category?: string;
+  description: string;
+  answer: string;
+  difficulty: string;
+  category: string;
+  bidCount?: number;
+  lowestBid?: { teamName: string; bidTimeSeconds: number } | null;
+  sale?: { teamName: string; winningBidSeconds: number; soldAt: string } | null;
 }
 
 export default function AdminQuestionsPage() {
@@ -608,6 +612,7 @@ function Round2Section() {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [showModal, setShowModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<AuctionQuestion | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -621,6 +626,7 @@ function Round2Section() {
   const [hintPenalty, setHintPenalty] = useState(-10);
   const [failurePenalty, setFailurePenalty] = useState(0);
   const [createAttachmentFiles, setCreateAttachmentFiles] = useState<File[]>([]);
+  const [revealAnswer, setRevealAnswer] = useState(false);
 
   useEffect(() => {
     fetchQuestions();
@@ -630,7 +636,8 @@ function Round2Section() {
     if (selectedQuestion) {
       fetchAttachments(selectedQuestion.questionId);
     }
-  }, [selectedQuestion]);
+    setRevealAnswer(false);
+  }, [selectedQuestion?.id]);
 
   const fetchQuestions = async () => {
     try {
@@ -648,6 +655,7 @@ function Round2Section() {
   };
 
   const resetForm = () => {
+    setEditingQuestion(null);
     setTitle("");
     setDescription("");
     setAnswer("");
@@ -662,14 +670,36 @@ function Round2Section() {
     setCreateAttachmentFiles([]);
   };
 
+  const handleEditClick = (q: AuctionQuestion) => {
+    setEditingQuestion(q);
+    setTitle(q.title);
+    setDescription(q.description);
+    setAnswer(q.answer);
+    setDifficulty(q.difficulty);
+    setCategory(q.category);
+    setTopic(q.topic);
+    setOutline(q.outline);
+    setBaseTimeSeconds(q.baseTimeSeconds);
+    setPoints(q.points);
+    setHintPenalty(q.hintPenalty);
+    setFailurePenalty(q.failurePenalty);
+    setCreateAttachmentFiles([]);
+    setShowModal(true);
+  };
+
   const handleCreateQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateLoading(true);
     setMessage(null);
 
     try {
-      const res = await fetch("/api/admin/auction/questions", {
-        method: "POST",
+      const url = editingQuestion
+        ? `/api/admin/auction/questions?id=${editingQuestion.id}`
+        : "/api/admin/auction/questions";
+      const method = editingQuestion ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
@@ -687,7 +717,7 @@ function Round2Section() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create auction question");
+      if (!res.ok) throw new Error(data.error || `Failed to ${editingQuestion ? "update" : "create"} auction question`);
 
       const questionId = data.auctionQuestion.questionId;
 
@@ -716,10 +746,13 @@ function Round2Section() {
         }
       }
 
-      setMessage({ type: 'success', text: `Auction question "${title}" created` });
+      setMessage({ type: 'success', text: `Auction question "${title}" ${editingQuestion ? "updated" : "created"}` });
       setShowModal(false);
       resetForm();
       fetchQuestions();
+      if (selectedQuestion && data.auctionQuestion.id === selectedQuestion.id) {
+        setSelectedQuestion(data.auctionQuestion);
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -848,7 +881,7 @@ function Round2Section() {
     <div className="space-y-6">
       <div className="flex justify-end">
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => { resetForm(); setShowModal(true); }}
           className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold font-mono text-xs tracking-wider rounded-xl flex items-center gap-2 transition-all shadow-cyan-glow"
         >
           <Plus className="w-4 h-4" />
@@ -944,12 +977,106 @@ function Round2Section() {
           {selectedQuestion ? (
             <>
               <div className="p-4 border-b border-slate-800">
-                <h3 className="text-sm font-bold font-mono text-white">
-                  {selectedQuestion.title}
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  {selectedQuestion.outline}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold font-mono text-white">
+                        {selectedQuestion.title}
+                      </h3>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                        selectedQuestion.status === "SOLD" ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/40" :
+                        selectedQuestion.status === "OPEN" ? "bg-amber-950/40 text-amber-300 border-amber-500/40" :
+                        "bg-slate-800/60 text-slate-400 border-slate-700"
+                      }`}>
+                        {selectedQuestion.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {selectedQuestion.topic}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleEditClick(selectedQuestion)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-cyan-500/20 hover:border-cyan-500/50 border border-slate-700 text-slate-200 hover:text-cyan-300 text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 transition-colors shrink-0"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    EDIT
+                  </button>
+                </div>
+
+                {/* Full field breakdown */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono">
+                  <div>
+                    <span className="text-slate-500 uppercase block">Points</span>
+                    <span className="text-cyan-400 font-bold">+{selectedQuestion.points}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 uppercase block">Hint Penalty</span>
+                    <span className="text-amber-400 font-bold">{selectedQuestion.hintPenalty}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 uppercase block">Timeout Penalty</span>
+                    <span className="text-rose-400 font-bold">
+                      {selectedQuestion.failurePenalty > 0 ? `-${selectedQuestion.failurePenalty}` : "None"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 uppercase block">Base Time</span>
+                    <span className="text-white font-bold">{selectedQuestion.baseTimeSeconds}s</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 uppercase block">Difficulty</span>
+                    <span className="text-white font-bold">{selectedQuestion.difficulty}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 uppercase block">Category</span>
+                    <span className="text-white font-bold">{selectedQuestion.category}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 uppercase block">Bids</span>
+                    <span className="text-white font-bold">{selectedQuestion.bidCount ?? 0}</span>
+                  </div>
+                  {selectedQuestion.sale && (
+                    <div>
+                      <span className="text-slate-500 uppercase block">Sold To</span>
+                      <span className="text-emerald-400 font-bold">{selectedQuestion.sale.teamName}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block mb-1">
+                    Outline (shown before bidding)
+                  </span>
+                  <p className="text-xs text-slate-300">{selectedQuestion.outline}</p>
+                </div>
+
+                <div className="mt-3">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block mb-1">
+                    Description / Prompt (shown after winning bid)
+                  </span>
+                  <p className="text-xs text-slate-300 whitespace-pre-wrap">{selectedQuestion.description}</p>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                    Secret Flag / Answer
+                  </span>
+                  <span className="font-mono bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-slate-300 text-[11px]">
+                    {revealAnswer ? selectedQuestion.answer : "••••••••••••••••"}
+                  </span>
+                  <button
+                    onClick={() => setRevealAnswer((v) => !v)}
+                    className="text-slate-400 hover:text-white"
+                    title={revealAnswer ? "Hide Answer" : "Reveal Answer"}
+                  >
+                    {revealAnswer ? (
+                      <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Upload Section */}
@@ -1044,9 +1171,13 @@ function Round2Section() {
                 <Gavel className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold font-mono text-white">ADD AUCTION QUESTION</h3>
+                <h3 className="text-lg font-bold font-mono text-white">
+                  {editingQuestion ? "EDIT AUCTION QUESTION" : "ADD AUCTION QUESTION"}
+                </h3>
                 <p className="text-xs text-slate-400">
-                  Create a Round 2 challenge. Points are admin-set with no time bonus.
+                  {editingQuestion
+                    ? "Update this Round 2 challenge's details."
+                    : "Create a Round 2 challenge. Points are admin-set with no time bonus."}
                 </p>
               </div>
             </div>
@@ -1134,7 +1265,9 @@ function Round2Section() {
                   accept=".pdf,.zip,.pcap,.pcapng,.txt,.md,.json,.xml,.csv,.log,.png,.jpg,.jpeg,.gif,.bmp,.webp"
                 />
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Given to the team once this question is assigned to them (25 MB per file).
+                  {editingQuestion
+                    ? "New files are added alongside any existing attachments (manage those from the attachments panel)."
+                    : "Given to the team once this question is assigned to them (25 MB per file)."}
                 </p>
               </div>
 
@@ -1234,7 +1367,9 @@ function Round2Section() {
                   disabled={createLoading || !title.trim() || !answer.trim() || !topic.trim() || !outline.trim()}
                   className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs rounded-xl transition-colors disabled:opacity-50"
                 >
-                  {createLoading ? "Creating..." : "Save Auction Question"}
+                  {createLoading
+                    ? (editingQuestion ? "Updating..." : "Creating...")
+                    : (editingQuestion ? "Update Auction Question" : "Save Auction Question")}
                 </button>
               </div>
             </form>
