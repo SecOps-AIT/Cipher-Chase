@@ -180,6 +180,14 @@ export async function getTimerStatus(assignmentId: string, teamId: string): Prom
   };
 }
 
+// processExpiredTimers is now piggybacked on frequently-polled team/admin
+// routes (there's no cron in this project), so it's throttled process-wide
+// to avoid opening a burst of extra transactions on every single poll from
+// every team every few seconds — that connection pressure was causing
+// unrelated writes (e.g. starting a timer) to fail under load.
+let lastExpirySweepAt = 0;
+const EXPIRY_SWEEP_MIN_INTERVAL_MS = 10_000;
+
 /**
  * Check for expired timers and mark them as failed
  */
@@ -187,8 +195,14 @@ export async function processExpiredTimers(): Promise<{
   processedCount: number;
   expiredAssignments: string[];
 }> {
+  const nowMs = Date.now();
+  if (nowMs - lastExpirySweepAt < EXPIRY_SWEEP_MIN_INTERVAL_MS) {
+    return { processedCount: 0, expiredAssignments: [] };
+  }
+  lastExpirySweepAt = nowMs;
+
   const now = new Date();
-  
+
   // Find all active assignments with expired deadlines
   const expiredAssignments = await prisma.teamChallengeAssignment.findMany({
     where: {
