@@ -31,7 +31,7 @@ model Team {
   qualified                Boolean                    @default(false)
   round1StartedAt          DateTime?
   round1DeadlineAt         DateTime?
-  round1Duration           Int                        @default(1200)
+  round1Duration           Int                        @default(1800)
   
   // Manual hint tracking
   manualHintsR1            Int                        @default(0)

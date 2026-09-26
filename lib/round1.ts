@@ -238,7 +238,7 @@ export async function getRound1QuestionsForTeam(
       started: !teamTimerNotStarted,
       startedAt: team?.round1StartedAt || null,
       deadlineAt: team?.round1DeadlineAt || null,
-      duration: team?.round1Duration || 1200,
+      duration: team?.round1Duration || 1800,
       secondsRemaining: teamTimerSecondsRemaining,
       status: teamTimerStatus,
     },
@@ -566,7 +566,7 @@ export async function startTeamRound1Timer(teamId: string): Promise<{
     };
   }
 
-  const duration = team.round1Duration || 1200; // 20 minutes default
+  const duration = team.round1Duration || 1800; // 30 minutes default
   const startedAt = now;
   const deadlineAt = new Date(now.getTime() + duration * 1000);
 
@@ -630,7 +630,7 @@ export async function startTeamRound1Timer(teamId: string): Promise<{
         message: "Timer already started for this team.",
         startedAt: currentTeam?.round1StartedAt || undefined,
         deadlineAt: currentTeam?.round1DeadlineAt || undefined,
-        duration: currentTeam?.round1Duration || 1200,
+        duration: currentTeam?.round1Duration || 1800,
       };
     }
     throw error;

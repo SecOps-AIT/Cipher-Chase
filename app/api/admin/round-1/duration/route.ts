@@ -16,7 +16,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      defaultDuration: sampleTeam?.round1Duration || 1200, // 20 minutes default
+      defaultDuration: sampleTeam?.round1Duration || 1800, // 30 minutes default
     });
   } catch (err: any) {
     console.error("Error fetching Round 1 duration:", err);
