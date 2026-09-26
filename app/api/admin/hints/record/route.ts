@@ -207,10 +207,32 @@ export async function GET() {
       averageHintsPerTeam: hintStats.reduce((sum, t) => sum + t.totalHints, 0) / teams.length || 0
     };
 
+    const logEvents = await prisma.scoreEvent.findMany({
+      where: { type: "HINT_PENALTY" },
+      include: { team: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+
+    const log = logEvents.map((e) => {
+      const meta = (e.metadata as Record<string, any>) || {};
+      return {
+        id: e.id,
+        teamName: e.team.name,
+        round: meta.round ?? null,
+        questionTitle: meta.questionTitle ?? null,
+        penalty: Math.abs(e.points),
+        reason: e.reason,
+        recordedBy: meta.recordedBy ?? null,
+        createdAt: e.createdAt.toISOString(),
+      };
+    });
+
     return NextResponse.json({
       success: true,
       summary,
-      teams: hintStats
+      teams: hintStats,
+      log,
     });
 
   } catch (err: any) {
