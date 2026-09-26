@@ -25,16 +25,18 @@ export async function startQuestionTimer({
     timeRemaining: number;
   }
 }> {
-  return await prisma.$transaction(async (tx) => {
+  let auditEvent: Parameters<typeof logAuditEvent>[0] | null = null;
+
+  const result = await prisma.$transaction(async (tx) => {
     const assignment = await tx.teamChallengeAssignment.findUnique({
       where: { id: assignmentId },
       include: {
         team: { select: { name: true } },
-        auctionQuestion: { 
-          select: { 
+        auctionQuestion: {
+          select: {
             title: true,
             round: { select: { eventId: true } }
-          } 
+          }
         }
       }
     });
@@ -50,7 +52,7 @@ export async function startQuestionTimer({
     if (assignment.status === "ACTIVE") {
       // Timer already started, return current state
       const now = new Date();
-      const timeRemaining = assignment.deadlineAt 
+      const timeRemaining = assignment.deadlineAt
         ? Math.max(0, Math.floor((assignment.deadlineAt.getTime() - now.getTime()) / 1000))
         : 0;
 
@@ -68,9 +70,9 @@ export async function startQuestionTimer({
     }
 
     if (assignment.status !== "READY") {
-      return { 
-        success: false, 
-        message: `Question is ${assignment.status.toLowerCase()} and cannot be started` 
+      return {
+        success: false,
+        message: `Question is ${assignment.status.toLowerCase()} and cannot be started`
       };
     }
 
@@ -87,14 +89,17 @@ export async function startQuestionTimer({
       }
     });
 
-    // Log timer start
-    await logAuditEvent({
+    // Defer the audit log write until after the transaction commits — writing
+    // via the global `prisma` client from inside an active transaction opens
+    // a second pooled connection while the first is still held, which can
+    // exhaust the pool under load (pgbouncer transaction mode).
+    auditEvent = {
       eventId: assignment.auctionQuestion.round.eventId,
       teamId,
       actor: "TEAM",
       action: "QUESTION_TIMER_STARTED",
       details: `Team "${assignment.team.name}" started timer for "${assignment.auctionQuestion.title}" (${assignment.winningBidSeconds}s deadline)`
-    });
+    };
 
     return {
       success: true,
@@ -108,6 +113,12 @@ export async function startQuestionTimer({
       }
     };
   });
+
+  if (auditEvent) {
+    await logAuditEvent(auditEvent);
+  }
+
+  return result;
 }
 
 /**
@@ -228,10 +239,10 @@ export async function processExpiredTimers(): Promise<{
 
   for (const assignment of expiredAssignments) {
     try {
-      await prisma.$transaction(async (tx) => {
-        // Penalty is negative or zero, set per-question by the admin
-        const penalty = -Math.abs(assignment.auctionQuestion.failurePenalty || 0);
+      // Penalty is negative or zero, set per-question by the admin
+      const penalty = -Math.abs(assignment.auctionQuestion.failurePenalty || 0);
 
+      await prisma.$transaction(async (tx) => {
         await tx.teamChallengeAssignment.update({
           where: { id: assignment.id },
           data: {
@@ -260,16 +271,17 @@ export async function processExpiredTimers(): Promise<{
               : `Time expired for "${assignment.auctionQuestion.title}" (no points awarded)`
           }
         });
-
-        // Log the timeout
-        await logAuditEvent({
-          eventId: assignment.auctionQuestion.round.eventId,
-          teamId: assignment.teamId,
-          actor: "SYSTEM",
-          action: "QUESTION_TIMEOUT",
-          details: `Team "${assignment.team.name}" timed out on "${assignment.auctionQuestion.title}" (${penalty} pts)`
-        });
       }, { timeout: 20000, maxWait: 10000 });
+
+      // Logged after the transaction commits — see note on startQuestionTimer
+      // about not nesting a global-client write inside an open transaction.
+      await logAuditEvent({
+        eventId: assignment.auctionQuestion.round.eventId,
+        teamId: assignment.teamId,
+        actor: "SYSTEM",
+        action: "QUESTION_TIMEOUT",
+        details: `Team "${assignment.team.name}" timed out on "${assignment.auctionQuestion.title}" (${penalty} pts)`
+      });
 
       results.push(assignment.id);
     } catch (error) {
@@ -310,16 +322,18 @@ export async function submitQuestionAnswer({
     status: string;
   };
 }> {
-  return await prisma.$transaction(async (tx) => {
+  let auditEvent: Parameters<typeof logAuditEvent>[0] | null = null;
+
+  const result = await prisma.$transaction(async (tx) => {
     const assignment = await tx.teamChallengeAssignment.findUnique({
       where: { id: assignmentId },
       include: {
         team: { select: { name: true } },
-        auctionQuestion: { 
-          include: { 
+        auctionQuestion: {
+          include: {
             question: { select: { answer: true, answerMode: true } },
             round: { select: { eventId: true, id: true } }
-          } 
+          }
         }
       }
     });
@@ -345,10 +359,10 @@ export async function submitQuestionAnswer({
     // Normalize answers for comparison
     const correctAnswer = assignment.auctionQuestion.question.answer;
     const answerMode = assignment.auctionQuestion.question.answerMode || "TRIMMED";
-    
+
     let normalizedSubmitted = answer;
     let normalizedCorrect = correctAnswer;
-    
+
     if (answerMode === "TRIMMED") {
       normalizedSubmitted = answer.trim().toLowerCase();
       normalizedCorrect = correctAnswer.trim().toLowerCase();
@@ -357,7 +371,7 @@ export async function submitQuestionAnswer({
     const isCorrect = normalizedSubmitted === normalizedCorrect;
 
     // Calculate time used
-    const timeUsedSeconds = assignment.startedAt 
+    const timeUsedSeconds = assignment.startedAt
       ? Math.floor((now.getTime() - assignment.startedAt.getTime()) / 1000)
       : 0;
 
@@ -411,23 +425,21 @@ export async function submitQuestionAnswer({
         }
       });
 
-      // Log successful solve
-      await logAuditEvent({
+      auditEvent = {
         eventId: assignment.auctionQuestion.round.eventId,
         teamId,
         actor: "TEAM",
         action: "QUESTION_SOLVED",
         details: `Team "${assignment.team.name}" solved "${assignment.auctionQuestion.title}" (+${scoreChange} pts)`
-      });
+      };
     } else {
-      // Log incorrect attempt
-      await logAuditEvent({
+      auditEvent = {
         eventId: assignment.auctionQuestion.round.eventId,
         teamId,
         actor: "TEAM",
         action: "INCORRECT_SUBMISSION",
         details: `Team "${assignment.team.name}" submitted incorrect answer for "${assignment.auctionQuestion.title}"`
-      });
+      };
     }
 
     return {
@@ -441,6 +453,12 @@ export async function submitQuestionAnswer({
       }
     };
   }, { timeout: 20000, maxWait: 10000 });
+
+  if (auditEvent) {
+    await logAuditEvent(auditEvent);
+  }
+
+  return result;
 }
 
 // ============================================================
